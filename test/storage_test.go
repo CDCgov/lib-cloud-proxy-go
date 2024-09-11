@@ -20,12 +20,28 @@ func TestAzureInitFromIdentity(t *testing.T) {
 
 func TestAzureListFiles(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, _ := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
 	if az != nil {
-		files, _ := az.ListFiles(context.Background(), "hl7ingress", 10, "/Candida")
+		files, _ := az.ListFiles(context.Background(), "hl7ingress", 10, "demo")
 		fmt.Printf("Number of files found: %d \n", len(files))
 		for _, file := range files {
 			fmt.Println(file)
 		}
+	} else {
+		fmt.Printf("could not get proxy: %s", err.Error())
+	}
+}
+
+func TestListFolders(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		folders, _ := az.ListFolders(context.Background(), "hl7ingress", 10, "demo")
+		fmt.Printf("Number of folders found: %d \n", len(folders))
+		for _, folder := range folders {
+			fmt.Println(folder)
+		}
+	} else {
+		fmt.Printf("could not get proxy: %s", err.Error())
 	}
 }

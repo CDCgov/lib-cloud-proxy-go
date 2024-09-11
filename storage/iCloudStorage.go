@@ -7,7 +7,7 @@ import (
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
-	//ListFolders(containerName string) ([]string, error)
+	ListFolders(containerName string) ([]string, error)
 	//GetFile(containerName string, fileName string) (CloudFile, error)
 	//GetFileContent(containerName string, fileName string) (string, error)
 	//GetFileContentAsInputStream(containerName string, fileName string) (io.Reader, error)

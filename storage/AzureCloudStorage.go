@@ -5,10 +5,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
 )
 
 //implements iCloudStorageReader
+const max_RESULT int = 500
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
@@ -61,10 +63,9 @@ func NewAzureCloudStorageProxyFromConnectionString(connectionString string) (*Az
 	return nil, err
 }
 
-func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string,
-	maxNumber int32, prefix string) ([]string, error) {
+func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
 	if maxNumber <= 0 {
-		maxNumber = 5000
+		maxNumber = max_RESULT
 	}
 	if prefix == "" {
 		prefix = "/"
@@ -72,9 +73,8 @@ func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName s
 	var cloudError *CloudStorageError
 	fileList := make([]string, 0)
 	pager := az.blobServiceClient.NewListBlobsFlatPager(containerName, &azblob.ListBlobsFlatOptions{
-		Include:    azblob.ListBlobsInclude{Deleted: false, Versions: false},
-		MaxResults: &maxNumber,
-		Prefix:     &prefix,
+		Include: azblob.ListBlobsInclude{Metadata: true},
+		Prefix:  &prefix,
 	})
 	maxReached := false
 	for pager.More() && !maxReached {
@@ -98,7 +98,37 @@ func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName s
 	return fileList, cloudError
 }
 
-//func (az AzureCloudStorage) ListFolders(container string) []string {
+func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
+	if maxNumber <= 0 {
+		maxNumber = max_RESULT
+	}
+	var cloudError *CloudStorageError
+	folderList := make([]string, 0)
+	containerClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName)
+	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{
+		Include: azblob.ListBlobsInclude{Metadata: true},
+		Prefix:  &prefix,
+	})
+	maxReached := false
+	for pager.More() && !maxReached {
+		resp, err := pager.NextPage(ctx)
+		if err == nil {
+			for _, folder := range resp.Segment.BlobPrefixes {
+				if len(folderList) < maxNumber {
+					folderList = append(folderList, *folder.Name)
+				} else {
+					maxReached = true
+					break
+				}
+			}
+		} else {
+			cloudError = wrapError("ListFolders error", err)
+		}
+	}
+
+	return folderList, cloudError
+}
+
 //
 //}
 //func (az AzureCloudStorage) GetFile(container string, fileName string) CloudFile     {}

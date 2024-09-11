@@ -2,17 +2,30 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"lib-cloud-proxy-go/storage"
 	"os"
 	"testing"
 )
 
+func printCloudError(err error) {
+	if err != nil {
+		fmt.Printf("Error occurred: %s \n", err.Error())
+		var cloudError *storage.CloudStorageError
+		if errors.As(err, &cloudError) {
+			if cloudError.Unwrap() != nil {
+				fmt.Printf("Cloud error caused by: %s \n", cloudError.Unwrap().Error())
+			}
+		}
+	}
+}
+
 func TestAzureInitFromIdentity(t *testing.T) {
 	accountURL := os.Getenv("AccountURL")
 	_, err := storage.NewAzureCloudStorageProxyFromIdentity(accountURL)
 	if err != nil {
-		fmt.Printf("error occurred: %s \n", err.Error())
+		printCloudError(err)
 	} else {
 		fmt.Println("Success")
 	}
@@ -28,7 +41,8 @@ func TestAzureListFiles(t *testing.T) {
 			fmt.Println(file)
 		}
 	} else {
-		fmt.Printf("could not get proxy: %s", err.Error())
+		fmt.Println("could not get proxy:")
+		printCloudError(err)
 	}
 }
 
@@ -42,6 +56,7 @@ func TestListFolders(t *testing.T) {
 			fmt.Println(folder)
 		}
 	} else {
-		fmt.Printf("could not get proxy: %s", err.Error())
+		fmt.Println("could not get proxy:")
+		printCloudError(err)
 	}
 }

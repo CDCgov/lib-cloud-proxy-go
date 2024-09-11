@@ -15,7 +15,7 @@ type AzureCloudStorageProxy struct {
 }
 
 func wrapError(msg string, err error) *CloudStorageError {
-	cloudError := CloudStorageError{Message: msg, InternalError: err}
+	cloudError := CloudStorageError{message: msg, internalError: err}
 	return &cloudError
 }
 func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
@@ -119,8 +119,6 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
 }
 
-//
-//}
 //func (az AzureCloudStorage) GetFile(container string, fileName string) CloudFile     {}
 //func (az AzureCloudStorage) GetFileContent(container string, fileName string) string {}
 //func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {

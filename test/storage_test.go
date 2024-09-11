@@ -3,7 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
-	"lib-hl7v2-cloud-proxy-go/storage"
+	"lib-cloud-proxy-go/storage"
 	"os"
 	"testing"
 )

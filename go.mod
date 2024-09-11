@@ -1,4 +1,4 @@
-module lib-hl7v2-cloud-proxy-go
+module lib-cloud-proxy-go
 
 go 1.0.0
 

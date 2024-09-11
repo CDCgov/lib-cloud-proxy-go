@@ -1,21 +1,21 @@
 package storage
 
 import (
-	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
 )
 
-//implements iCloudStorageReader
+// implements iCloudStorageReader
+const max_RESULT int = 500
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
 }
 
 func wrapError(msg string, err error) *CloudStorageError {
-	cloudError := CloudStorageError{message: msg, error: err}
+	cloudError := CloudStorageError{Message: msg, InternalError: err}
 	return &cloudError
 }
 func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
@@ -61,29 +61,42 @@ func NewAzureCloudStorageProxyFromConnectionString(connectionString string) (*Az
 	return nil, err
 }
 
-func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string,
-	maxNumber int32, prefix string) ([]string, error) {
+type blobListType string
+
+const (
+	listTypeFile   blobListType = "FILE"
+	listTypeFolder blobListType = "FOLDER"
+)
+
+func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, containerName string,
+	maxNumber int, prefix string, listType blobListType) ([]string, error) {
 	if maxNumber <= 0 {
-		maxNumber = 5000
-	}
-	if prefix == "" {
-		prefix = "/"
+		maxNumber = max_RESULT
 	}
 	var cloudError *CloudStorageError
-	fileList := make([]string, 0)
-	pager := az.blobServiceClient.NewListBlobsFlatPager(containerName, &azblob.ListBlobsFlatOptions{
-		Include:    azblob.ListBlobsInclude{Deleted: false, Versions: false},
-		MaxResults: &maxNumber,
-		Prefix:     &prefix,
+	resultsList := make([]string, 0)
+	containerClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName)
+	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{
+		Include: azblob.ListBlobsInclude{Metadata: true},
+		Prefix:  &prefix,
 	})
 	maxReached := false
 	for pager.More() && !maxReached {
 		resp, err := pager.NextPage(ctx)
 		if err == nil {
-			for _, blob := range resp.Segment.BlobItems {
-				if *blob.Properties.BlobType == blob2.BlobTypeBlockBlob {
-					if len(fileList) < int(maxNumber) {
-						fileList = append(fileList, *blob.Name)
+			if listType == listTypeFile {
+				for _, file := range resp.Segment.BlobItems {
+					if len(resultsList) < maxNumber {
+						resultsList = append(resultsList, *file.Name)
+					} else {
+						maxReached = true
+						break
+					}
+				}
+			} else {
+				for _, folder := range resp.Segment.BlobPrefixes {
+					if len(resultsList) < maxNumber {
+						resultsList = append(resultsList, *folder.Name)
 					} else {
 						maxReached = true
 						break
@@ -91,14 +104,21 @@ func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName s
 				}
 			}
 		} else {
-			cloudError = wrapError(fmt.Sprintf("ListFiles error retrieving paged results from %s", containerName), err)
-			break
+			cloudError = wrapError("Error listing contents of container", err)
 		}
 	}
-	return fileList, cloudError
+
+	return resultsList, cloudError
 }
 
-//func (az AzureCloudStorage) ListFolders(container string) []string {
+func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
+	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFile)
+}
+
+func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
+	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
+}
+
 //
 //}
 //func (az AzureCloudStorage) GetFile(container string, fileName string) CloudFile     {}

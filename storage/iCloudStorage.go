@@ -7,26 +7,26 @@ import (
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
-	//ListFolders(containerName string) ([]string, error)
-	//GetFile(containerName string, fileName string) (CloudFile, error)
-	//GetFileContent(containerName string, fileName string) (string, error)
-	//GetFileContentAsInputStream(containerName string, fileName string) (io.Reader, error)
-	//GetMetadata(containerName string, fileName string, urlDecode bool) (map[string]string, error)
-	//SaveFile(containerName string, file CloudFile) error
+	ListFolders(containerName string) ([]string, error)
+	//GetFile(containerName string, fileName string) (CloudFile, InternalError)
+	//GetFileContent(containerName string, fileName string) (string, InternalError)
+	//GetFileContentAsInputStream(containerName string, fileName string) (io.Reader, InternalError)
+	//GetMetadata(containerName string, fileName string, urlDecode bool) (map[string]string, InternalError)
+	//SaveFile(containerName string, file CloudFile) InternalError
 	//SaveFileFromStream(containerName string, fileName string, content io.Reader,
-	//	size int64, metadata map[string]string) error
-	//DeleteFile(containerName string, fileName string) (int, error)
+	//	size int64, metadata map[string]string) InternalError
+	//DeleteFile(containerName string, fileName string) (int, InternalError)
 }
 
 type CloudStorageError struct {
-	message string
-	error   error
+	Message       string
+	InternalError error
 }
 
 func (err *CloudStorageError) Error() string {
-	return fmt.Sprintf("CloudStorage error: %s", err.message)
+	return fmt.Sprintf("CloudStorage Error: %s", err.Message)
 }
 
 func (err *CloudStorageError) Unwrap() error {
-	return err.error
+	return err.InternalError
 }

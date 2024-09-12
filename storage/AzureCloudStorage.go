@@ -6,6 +6,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
+	"io"
 	"lib-cloud-proxy-go/util"
 	"time"
 )
@@ -47,7 +48,7 @@ func getBlobServiceClient(accountURL string, useManagedIdentity bool, connection
 	}
 }
 
-func NewAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
+func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
 	blobClient, err := getBlobServiceClient(accountURL, true, "")
 	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: blobClient}, nil
@@ -55,7 +56,7 @@ func NewAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorag
 	return nil, err
 }
 
-func NewAzureCloudStorageProxyFromConnectionString(connectionString string) (*AzureCloudStorageProxy, error) {
+func newAzureCloudStorageProxyFromConnectionString(connectionString string) (*AzureCloudStorageProxy, error) {
 	blobClient, err := getBlobServiceClient("", false, connectionString)
 	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: blobClient}, nil
@@ -154,8 +155,15 @@ func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context,
 	}
 }
 
-// func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
-// }
+func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error) {
+	streamResp, err := az.blobServiceClient.DownloadStream(ctx, containerName, fileName, nil)
+	if err == nil {
+		return streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{}), nil
+	} else {
+		return nil, err
+	}
+}
+
 func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error) {
 	props := make(map[string]string)
 	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)

@@ -5,6 +5,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
+	"time"
 )
 
 // implements iCloudStorageReader
@@ -119,12 +120,36 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
 }
 
-//func (az AzureCloudStorage) GetFile(container string, fileName string) CloudFile     {}
-//func (az AzureCloudStorage) GetFileContent(container string, fileName string) string {}
-//func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
+//func (az *AzureCloudStorageProxy) GetFile(containerName string, fileName string) (CloudFile, error) {
+//	//CloudFile(bucket, fileName, getMetadata(bucket, fileName), getFileContent(bucket, fileName))
 //}
-//func (az AzureCloudStorage) GetMetadata(container string, fileName string, urlDecode bool) map[string]string {
+//
+//func (az *AzureCloudStorageProxy) GetFileContent(containerName string, fileName string) (string, error) {
+//
 //}
+
+// func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
+// }
+func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error) {
+	var cloudError *CloudStorageError
+	props := make(map[string]string)
+	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)
+	resp, err := blobClient.GetProperties(ctx, nil)
+	if err == nil {
+		for key, value := range resp.Metadata {
+			if value != nil {
+				props[key] = *value
+			} else {
+				props[key] = ""
+			}
+		}
+		props["last_modified"] = resp.LastModified.Format(time.DateTime)
+	} else {
+		cloudError = wrapError("Error getting blob metadata", err)
+	}
+	return props, cloudError
+}
+
 //func (az AzureCloudStorage) SaveFile(container string, file CloudFile) {}
 //func (az AzureCloudStorage) SaveFileFromStream(container string, fileName string, content io.Reader,
 //	size int64, metadata map[string]string) {

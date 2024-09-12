@@ -5,6 +5,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
+	"lib-cloud-proxy-go/util"
 	"time"
 )
 
@@ -134,9 +135,9 @@ func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName
 	if err == nil {
 		for key, value := range resp.Metadata {
 			if value != nil {
-				props[key] = *value
+				props[util.NormalizeString(key)] = *value
 			} else {
-				props[key] = ""
+				props[util.NormalizeString(key)] = ""
 			}
 		}
 		props["last_modified"] = resp.LastModified.Format(time.DateTime)

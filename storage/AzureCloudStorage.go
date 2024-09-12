@@ -18,9 +18,9 @@ type AzureCloudStorageProxy struct {
 func wrapError(msg string, err error) *CloudStorageError {
 	return &CloudStorageError{message: msg, internalError: err}
 }
+
 func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
 	// Create a new service client with token credential
-	var cloudError *CloudStorageError
 	if useManagedIdentity {
 		credential, err := azidentity.NewDefaultAzureCredential(nil)
 		if err == nil {
@@ -28,21 +28,20 @@ func getBlobServiceClient(accountURL string, useManagedIdentity bool, connection
 			if er == nil {
 				return client, err
 			} else {
-				cloudError = wrapError("InitializeServiceClient unable to create Azure blob service client", er)
+				return client, wrapError("InitializeServiceClient unable to create Azure blob service client", er)
 			}
 		} else {
-			cloudError = wrapError("InitializeServiceClient unable to obtain managed identity credential", err)
+			return nil, wrapError("InitializeServiceClient unable to obtain managed identity credential", err)
 		}
 	} else {
 		client, err := azblob.NewClientFromConnectionString(connectionString, nil)
 		if err == nil {
 			return client, err
 		} else {
-			cloudError = wrapError("InitializeServiceClient unable to create Azure blob service client from "+
+			return client, wrapError("InitializeServiceClient unable to create Azure blob service client from "+
 				"connection string", err)
 		}
 	}
-	return nil, cloudError
 }
 
 func NewAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {

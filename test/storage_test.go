@@ -78,3 +78,35 @@ func TestGetMetadata(t *testing.T) {
 		printCloudError(err)
 	}
 }
+
+func TestGetFileContent(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		content, err := az.GetFileContent(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(content)
+		} else {
+			printCloudError(err)
+		}
+	} else {
+		printCloudError(err)
+	}
+}
+
+func TestGetFile(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		cloudFile, err := az.GetFile(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(cloudFile.Metadata)
+		} else {
+			printCloudError(err)
+		}
+	} else {
+		printCloudError(err)
+	}
+}

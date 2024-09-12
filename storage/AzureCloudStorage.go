@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
@@ -11,6 +12,7 @@ import (
 
 // implements iCloudStorageReader
 const max_RESULT int = 500
+const time_FORMAT string = time.RFC3339
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
@@ -118,13 +120,39 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
 }
 
-//func (az *AzureCloudStorageProxy) GetFile(containerName string, fileName string) (CloudFile, error) {
-//	//CloudFile(bucket, fileName, getMetadata(bucket, fileName), getFileContent(bucket, fileName))
-//}
-//
-//func (az *AzureCloudStorageProxy) GetFileContent(containerName string, fileName string) (string, error) {
-//
-//}
+func (az *AzureCloudStorageProxy) GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error) {
+	content, metadata, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
+	file := CloudFile{Bucket: containerName,
+		FileName: fileName,
+		Metadata: metadata,
+		Content:  content}
+	return file, err
+}
+
+func (az *AzureCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+	content, _, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
+	return content, err
+}
+
+func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context, containerName string,
+	fileName string) (string, map[string]string, error) {
+
+	metadata := make(map[string]string)
+	streamResp, err := az.blobServiceClient.DownloadStream(ctx, containerName, fileName, nil)
+	if err != nil {
+		return "", metadata, wrapError("Unable to get file content", err)
+	} else {
+		metadata = readMetadata(streamResp.Metadata)
+		metadata["last_modified"] = streamResp.LastModified.Format(time_FORMAT)
+		data := bytes.Buffer{}
+		retryReader := streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{})
+		_, err := data.ReadFrom(retryReader)
+		if err != nil {
+			return data.String(), metadata, wrapError("Error occurred while reading data", err)
+		}
+		return data.String(), metadata, nil
+	}
+}
 
 // func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
 // }
@@ -133,18 +161,24 @@ func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName
 	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)
 	resp, err := blobClient.GetProperties(ctx, nil)
 	if err == nil {
-		for key, value := range resp.Metadata {
-			if value != nil {
-				props[util.NormalizeString(key)] = *value
-			} else {
-				props[util.NormalizeString(key)] = ""
-			}
-		}
-		props["last_modified"] = resp.LastModified.Format(time.DateTime)
+		props = readMetadata(resp.Metadata)
+		props["last_modified"] = resp.LastModified.Format(time_FORMAT)
 	} else {
 		return props, wrapError("Error getting blob metadata", err)
 	}
 	return props, nil
+}
+
+func readMetadata(metadata map[string]*string) map[string]string {
+	props := make(map[string]string)
+	for key, value := range metadata {
+		if value != nil {
+			props[util.NormalizeString(key)] = *value
+		} else {
+			props[util.NormalizeString(key)] = ""
+		}
+	}
+	return props
 }
 
 //func (az AzureCloudStorage) SaveFile(container string, file CloudFile) {}

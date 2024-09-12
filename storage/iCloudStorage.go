@@ -8,8 +8,8 @@ import (
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	ListFolders(ctx context.Context, containerName string) ([]string, error)
-	//GetFile(containerName string, fileName string) (CloudFile, error)
-	//GetFileContent(containerName string, fileName string) (string, error)
+	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
+	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
 	//GetFileContentAsInputStream(containerName string, fileName string) (io.Reader, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	//SaveFile(containerName string, file CloudFile) error

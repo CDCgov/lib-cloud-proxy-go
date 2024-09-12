@@ -16,8 +16,7 @@ type AzureCloudStorageProxy struct {
 }
 
 func wrapError(msg string, err error) *CloudStorageError {
-	cloudError := CloudStorageError{message: msg, internalError: err}
-	return &cloudError
+	return &CloudStorageError{message: msg, internalError: err}
 }
 func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
 	// Create a new service client with token credential
@@ -74,7 +73,6 @@ func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, contai
 	if maxNumber <= 0 {
 		maxNumber = max_RESULT
 	}
-	var cloudError *CloudStorageError
 	resultsList := make([]string, 0)
 	containerClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName)
 	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{
@@ -105,11 +103,11 @@ func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, contai
 				}
 			}
 		} else {
-			cloudError = wrapError("Error listing contents of container", err)
+			return resultsList, wrapError("Error listing contents of container", err)
 		}
 	}
 
-	return resultsList, cloudError
+	return resultsList, nil
 }
 
 func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
@@ -131,7 +129,6 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 // func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
 // }
 func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error) {
-	var cloudError *CloudStorageError
 	props := make(map[string]string)
 	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)
 	resp, err := blobClient.GetProperties(ctx, nil)
@@ -145,9 +142,9 @@ func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName
 		}
 		props["last_modified"] = resp.LastModified.Format(time.DateTime)
 	} else {
-		cloudError = wrapError("Error getting blob metadata", err)
+		return props, wrapError("Error getting blob metadata", err)
 	}
-	return props, cloudError
+	return props, nil
 }
 
 //func (az AzureCloudStorage) SaveFile(container string, file CloudFile) {}

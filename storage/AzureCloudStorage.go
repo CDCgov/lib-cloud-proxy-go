@@ -1,26 +1,29 @@
 package storage
 
 import (
+	"bytes"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
+	"lib-cloud-proxy-go/util"
+	"time"
 )
 
 // implements iCloudStorageReader
 const max_RESULT int = 500
+const time_FORMAT string = time.RFC3339
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
 }
 
 func wrapError(msg string, err error) *CloudStorageError {
-	cloudError := CloudStorageError{message: msg, internalError: err}
-	return &cloudError
+	return &CloudStorageError{message: msg, internalError: err}
 }
+
 func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
 	// Create a new service client with token credential
-	var cloudError *CloudStorageError
 	if useManagedIdentity {
 		credential, err := azidentity.NewDefaultAzureCredential(nil)
 		if err == nil {
@@ -28,21 +31,20 @@ func getBlobServiceClient(accountURL string, useManagedIdentity bool, connection
 			if er == nil {
 				return client, err
 			} else {
-				cloudError = wrapError("InitializeServiceClient unable to create Azure blob service client", er)
+				return client, wrapError("InitializeServiceClient unable to create Azure blob service client", er)
 			}
 		} else {
-			cloudError = wrapError("InitializeServiceClient unable to obtain managed identity credential", err)
+			return nil, wrapError("InitializeServiceClient unable to obtain managed identity credential", err)
 		}
 	} else {
 		client, err := azblob.NewClientFromConnectionString(connectionString, nil)
 		if err == nil {
 			return client, err
 		} else {
-			cloudError = wrapError("InitializeServiceClient unable to create Azure blob service client from "+
+			return client, wrapError("InitializeServiceClient unable to create Azure blob service client from "+
 				"connection string", err)
 		}
 	}
-	return nil, cloudError
 }
 
 func NewAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
@@ -73,7 +75,6 @@ func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, contai
 	if maxNumber <= 0 {
 		maxNumber = max_RESULT
 	}
-	var cloudError *CloudStorageError
 	resultsList := make([]string, 0)
 	containerClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName)
 	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{
@@ -104,11 +105,11 @@ func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, contai
 				}
 			}
 		} else {
-			cloudError = wrapError("Error listing contents of container", err)
+			return resultsList, wrapError("Error listing contents of container", err)
 		}
 	}
 
-	return resultsList, cloudError
+	return resultsList, nil
 }
 
 func (az *AzureCloudStorageProxy) ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error) {
@@ -119,12 +120,67 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 	return az.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
 }
 
-//func (az AzureCloudStorage) GetFile(container string, fileName string) CloudFile     {}
-//func (az AzureCloudStorage) GetFileContent(container string, fileName string) string {}
-//func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
-//}
-//func (az AzureCloudStorage) GetMetadata(container string, fileName string, urlDecode bool) map[string]string {
-//}
+func (az *AzureCloudStorageProxy) GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error) {
+	content, metadata, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
+	file := CloudFile{Bucket: containerName,
+		FileName: fileName,
+		Metadata: metadata,
+		Content:  content}
+	return file, err
+}
+
+func (az *AzureCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+	content, _, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
+	return content, err
+}
+
+func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context, containerName string,
+	fileName string) (string, map[string]string, error) {
+
+	metadata := make(map[string]string)
+	streamResp, err := az.blobServiceClient.DownloadStream(ctx, containerName, fileName, nil)
+	if err != nil {
+		return "", metadata, wrapError("Unable to get file content", err)
+	} else {
+		metadata = readMetadata(streamResp.Metadata)
+		metadata["last_modified"] = streamResp.LastModified.Format(time_FORMAT)
+		data := bytes.Buffer{}
+		retryReader := streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{})
+		_, err := data.ReadFrom(retryReader)
+		if err != nil {
+			return data.String(), metadata, wrapError("Error occurred while reading data", err)
+		}
+		return data.String(), metadata, nil
+	}
+}
+
+// func (az AzureCloudStorage) GetFileContentAsInputStream(container string, fileName string) io.Reader {
+// }
+func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error) {
+	props := make(map[string]string)
+	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)
+	resp, err := blobClient.GetProperties(ctx, nil)
+	if err == nil {
+		props = readMetadata(resp.Metadata)
+		props["last_modified"] = resp.LastModified.Format(time_FORMAT)
+	} else {
+		return props, wrapError("Error getting blob metadata", err)
+	}
+	return props, nil
+}
+
+func readMetadata(metadata map[string]*string) map[string]string {
+	props := make(map[string]string)
+	for key, value := range metadata {
+		if value != nil {
+			props[util.NormalizeString(key)] = *value
+		} else {
+			props[util.NormalizeString(key)] = ""
+		}
+	}
+	return props
+}
+
 //func (az AzureCloudStorage) SaveFile(container string, file CloudFile) {}
 //func (az AzureCloudStorage) SaveFileFromStream(container string, fileName string, content io.Reader,
 //	size int64, metadata map[string]string) {

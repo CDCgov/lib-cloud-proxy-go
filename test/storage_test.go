@@ -60,3 +60,53 @@ func TestListFolders(t *testing.T) {
 		printCloudError(err)
 	}
 }
+
+func TestGetMetadata(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		metadata, e := az.GetMetadata(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+		if e == nil {
+			fmt.Println("Success")
+			fmt.Println(metadata)
+		} else {
+			fmt.Println("could not get metadata")
+			printCloudError(e)
+		}
+	} else {
+		fmt.Println("could not get proxy:")
+		printCloudError(err)
+	}
+}
+
+func TestGetFileContent(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		content, err := az.GetFileContent(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(content)
+		} else {
+			printCloudError(err)
+		}
+	} else {
+		printCloudError(err)
+	}
+}
+
+func TestGetFile(t *testing.T) {
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	if az != nil {
+		cloudFile, err := az.GetFile(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(cloudFile.Metadata)
+		} else {
+			printCloudError(err)
+		}
+	} else {
+		printCloudError(err)
+	}
+}

@@ -23,7 +23,8 @@ func printCloudError(err error) {
 
 func TestAzureInitFromIdentity(t *testing.T) {
 	accountURL := os.Getenv("AccountURL")
-	_, err := storage.NewAzureCloudStorageProxyFromIdentity(accountURL)
+	_, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{UseManagedIdentity: true, AccountURL: accountURL})
 	if err != nil {
 		printCloudError(err)
 	} else {
@@ -33,8 +34,9 @@ func TestAzureInitFromIdentity(t *testing.T) {
 
 func TestAzureListFiles(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
-	if az != nil {
+	az, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{ConnectionString: connectionString})
+	if err == nil {
 		files, _ := az.ListFiles(context.Background(), "hl7ingress", 10, "")
 		fmt.Printf("Number of files found: %d \n", len(files))
 		for _, file := range files {
@@ -48,9 +50,10 @@ func TestAzureListFiles(t *testing.T) {
 
 func TestListFolders(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
-	if az != nil {
-		folders, _ := az.ListFolders(context.Background(), "hl7ingress", 10, "/demo")
+	az, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{ConnectionString: connectionString})
+	if err == nil {
+		folders, _ := az.ListFolders(context.Background(), "hl7ingress", 10, "/")
 		fmt.Printf("Number of folders found: %d \n", len(folders))
 		for _, folder := range folders {
 			fmt.Println(folder)
@@ -63,8 +66,9 @@ func TestListFolders(t *testing.T) {
 
 func TestGetMetadata(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
-	if az != nil {
+	az, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{ConnectionString: connectionString})
+	if err == nil {
 		metadata, e := az.GetMetadata(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
 		if e == nil {
 			fmt.Println("Success")
@@ -81,8 +85,9 @@ func TestGetMetadata(t *testing.T) {
 
 func TestGetFileContent(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
-	if az != nil {
+	az, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{ConnectionString: connectionString})
+	if err == nil {
 		content, err := az.GetFileContent(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
 		if err == nil {
 			fmt.Println("Success")
@@ -97,7 +102,8 @@ func TestGetFileContent(t *testing.T) {
 
 func TestGetFile(t *testing.T) {
 	connectionString := os.Getenv("ConnectionString")
-	az, err := storage.NewAzureCloudStorageProxyFromConnectionString(connectionString)
+	az, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure,
+		storage.CloudStorageConnectionOptions{ConnectionString: connectionString})
 	if az != nil {
 		cloudFile, err := az.GetFile(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
 		if err == nil {

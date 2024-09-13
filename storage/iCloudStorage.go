@@ -14,9 +14,10 @@ type CloudStorageProxy interface {
 	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
 	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
-	//SaveFile(containerName string, file CloudFile) error
-	//SaveFileFromStream(containerName string, fileName string, content io.Reader,
-	//	size int64, metadata map[string]string) error
+	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+		content string) error
+	//SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+	//	inputStream io.Reader, size int)
 	//DeleteFile(containerName string, fileName string) (int, error)
 }
 
@@ -41,30 +42,40 @@ const (
 )
 
 type CloudStorageConnectionOptions struct {
-	UseManagedIdentity bool
-	AccountURL         string
-	ConnectionString   string
+	UseManagedIdentity  bool
+	UseConnectionString bool
+	UseSASToken         bool
+	AccountURL          string
+	ConnectionString    string
+	URLWithSASToken     string
 }
 
 func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudStorageConnectionOptions) (CloudStorageProxy, error) {
 	if options.UseManagedIdentity && options.AccountURL == "" {
 		return nil, errors.New("if using managed identity, AccountURL is required")
-	} else if !options.UseManagedIdentity && options.ConnectionString == "" {
-		return nil, errors.New("if not using managed identity, ConnectionString is required")
+	} else if options.UseConnectionString && options.ConnectionString == "" {
+		return nil, errors.New("if using connection string, ConnectionString is required")
+	} else if options.UseSASToken && options.URLWithSASToken == "" {
+		return nil, errors.New("if using SAS token, URLWithSASToken is required")
 	}
 	var err error
 	var proxy CloudStorageProxy
 	switch cloudStorageType {
 	case CloudStorageTypeAzure:
 		{
-			if options.UseManagedIdentity {
+			switch {
+			case options.UseManagedIdentity:
 				proxy, err = newAzureCloudStorageProxyFromIdentity(options.AccountURL)
-			} else {
+			case options.UseConnectionString:
 				proxy, err = newAzureCloudStorageProxyFromConnectionString(options.ConnectionString)
+			case options.UseSASToken:
+				proxy, err = newAzureCloudStorageProxyFromSASToken(options.URLWithSASToken)
+			default:
+				return nil, errors.New("one of UseManagedIdentity, UseConnectionString, or UseSASToken must be true")
 			}
 			return proxy, err
 		}
 	default:
-		return nil, nil
+		return nil, errors.New("unknown cloud storage type")
 	}
 }

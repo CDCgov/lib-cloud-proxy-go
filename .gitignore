@@ -30,6 +30,7 @@ hs_err_pid*
 .settings/
 .project
 .classpath
+.env
 
 # macOS
 .DS_Store

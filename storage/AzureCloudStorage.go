@@ -2,12 +2,14 @@ package storage
 
 import (
 	"bytes"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
+	"strings"
 	"time"
 )
 
@@ -23,45 +25,37 @@ func wrapError(msg string, err error) *CloudStorageError {
 	return &CloudStorageError{message: msg, internalError: err}
 }
 
-func getBlobServiceClient(accountURL string, useManagedIdentity bool, connectionString string) (*azblob.Client, error) {
-	// Create a new service client with token credential
-	if useManagedIdentity {
-		credential, err := azidentity.NewDefaultAzureCredential(nil)
-		if err == nil {
-			client, er := azblob.NewClient(accountURL, credential, nil)
-			if er == nil {
-				return client, err
-			} else {
-				return client, wrapError("InitializeServiceClient unable to create Azure blob service client", er)
-			}
-		} else {
-			return nil, wrapError("InitializeServiceClient unable to obtain managed identity credential", err)
-		}
-	} else {
-		client, err := azblob.NewClientFromConnectionString(connectionString, nil)
-		if err == nil {
-			return client, err
-		} else {
-			return client, wrapError("InitializeServiceClient unable to create Azure blob service client from "+
-				"connection string", err)
-		}
-	}
-}
-
 func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
-	blobClient, err := getBlobServiceClient(accountURL, true, "")
+	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
-		return &AzureCloudStorageProxy{blobServiceClient: blobClient}, nil
+		client, er := azblob.NewClient(accountURL, credential, nil)
+		if er == nil {
+			return &AzureCloudStorageProxy{blobServiceClient: client}, nil
+		} else {
+			return nil, wrapError("unable to create Azure blob service client", er)
+		}
 	}
 	return nil, err
 }
 
 func newAzureCloudStorageProxyFromConnectionString(connectionString string) (*AzureCloudStorageProxy, error) {
-	blobClient, err := getBlobServiceClient("", false, connectionString)
+	client, err := azblob.NewClientFromConnectionString(connectionString, nil)
 	if err == nil {
-		return &AzureCloudStorageProxy{blobServiceClient: blobClient}, nil
+		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
+	} else {
+		return nil, wrapError("unable to create Azure blob service client from "+
+			"connection string", err)
 	}
-	return nil, err
+}
+
+func newAzureCloudStorageProxyFromSASToken(token string) (*AzureCloudStorageProxy, error) {
+	client, err := azblob.NewClientWithNoCredential(token, nil)
+	if err == nil {
+		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
+	} else {
+		return nil, wrapError("unable to create Azure blob service client from "+
+			"url with SAS token", err)
+	}
 }
 
 type blobListType string
@@ -123,7 +117,7 @@ func (az *AzureCloudStorageProxy) ListFolders(ctx context.Context, containerName
 
 func (az *AzureCloudStorageProxy) GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error) {
 	content, metadata, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
-	file := CloudFile{Bucket: containerName,
+	file := CloudFile{Container: containerName,
 		FileName: fileName,
 		Metadata: metadata,
 		Content:  content}
@@ -189,8 +183,27 @@ func readMetadata(metadata map[string]*string) map[string]string {
 	return props
 }
 
-//func (az AzureCloudStorage) SaveFile(container string, file CloudFile) {}
-//func (az AzureCloudStorage) SaveFileFromStream(container string, fileName string, content io.Reader,
-//	size int64, metadata map[string]string) {
-//}
-//func (az AzureCloudStorage) DeleteFile(container string, fileName string) int {}
+func writeMetadata(metadata map[string]string) map[string]*string {
+	props := make(map[string]*string)
+	for key, value := range metadata {
+		props[key] = to.Ptr(value)
+	}
+	return props
+}
+
+func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containerName string, fileName string,
+	metadata map[string]string, content string) error {
+	contentReader := strings.NewReader(content)
+	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, contentReader, &azblob.UploadStreamOptions{
+		Metadata: writeMetadata(metadata),
+	})
+	if err != nil {
+		return wrapError("unable to save file from text", err)
+	} else {
+		return nil
+	}
+}
+
+//SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+//	inputStream io.Reader, size int)
+//DeleteFile(containerName string, fileName string) (int, error)

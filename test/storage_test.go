@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"lib-cloud-proxy-go/storage"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -177,14 +179,75 @@ func TestUploadText(t *testing.T) {
 				metadata, string(content))
 			if e != nil {
 				printCloudError(e)
+				assert.Fail(t, "failed")
 			} else {
 				println("Success")
 			}
 		} else {
 			printCloudError(err)
+			assert.Fail(t, "failed")
 		}
 	} else {
 		printCloudError(err)
+		assert.Fail(t, "failed")
 	}
 
+}
+
+func TestUploadStream(t *testing.T) {
+	initTests()
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
+		storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
+	if err == nil {
+		file, err := os.Open("test.HL7")
+		if err == nil {
+			metadata := map[string]string{
+				"upload_id":      "1234567890",
+				"data_stream_id": "DAART",
+			}
+			reader := bufio.NewReader(file)
+			e := az.SaveFileFromInputStream(context.Background(), "reports-test", "test-stream-upload.HL7",
+				metadata, reader)
+			if e != nil {
+				printCloudError(e)
+				assert.Fail(t, "failed")
+			} else {
+				println("Success")
+			}
+		} else {
+			printCloudError(err)
+			assert.Fail(t, "failed")
+		}
+	} else {
+		printCloudError(err)
+		assert.Fail(t, "failed")
+	}
+
+}
+
+func TestDeleteFile(t *testing.T) {
+	initTests()
+	connectionString := os.Getenv("ConnectionString")
+	az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
+		storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
+	if err == nil {
+		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload.HL7")
+		if er != nil {
+			printCloudError(er)
+			var cloudError *storage.CloudStorageError
+			if errors.As(er, &cloudError) {
+				inner := cloudError.Unwrap()
+				if strings.Contains(inner.Error(), "RESPONSE 404") {
+					// blob does not exist -- fine
+					assert.Truef(t, true, "succeeded")
+				} else {
+					assert.Fail(t, "failed")
+				}
+			}
+		} else {
+			println("Success")
+			assert.Truef(t, true, "succeeded")
+		}
+	}
 }

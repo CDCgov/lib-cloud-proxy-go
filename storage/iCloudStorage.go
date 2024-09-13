@@ -16,9 +16,9 @@ type CloudStorageProxy interface {
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
-	//SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	//	inputStream io.Reader, size int)
-	//DeleteFile(containerName string, fileName string) (int, error)
+	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+		inputStream io.Reader) error
+	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
 
 type CloudStorageError struct {

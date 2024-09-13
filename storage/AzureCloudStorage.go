@@ -204,6 +204,22 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 	}
 }
 
-//SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-//	inputStream io.Reader, size int)
-//DeleteFile(containerName string, fileName string) (int, error)
+func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+	inputStream io.Reader) error {
+	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, inputStream, &azblob.UploadStreamOptions{
+		Metadata: writeMetadata(metadata),
+	})
+	if err != nil {
+		return wrapError("unable to save file from input stream", err)
+	} else {
+		return nil
+	}
+}
+
+func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName string, fileName string) error {
+	_, err := az.blobServiceClient.DeleteBlob(ctx, containerName, fileName, nil)
+	if err != nil {
+		return wrapError("unable to delete blob", err)
+	}
+	return nil
+}

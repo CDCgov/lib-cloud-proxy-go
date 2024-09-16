@@ -10,12 +10,7 @@ import (
 	"io"
 	"lib-cloud-proxy-go/util"
 	"strings"
-	"time"
 )
-
-// implements iCloudStorageReader
-const max_RESULT int = 500
-const time_FORMAT string = time.RFC3339
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client

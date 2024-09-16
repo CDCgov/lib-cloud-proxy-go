@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"io"
+	"time"
 )
+
+const max_RESULT int = 500
+const time_FORMAT string = time.RFC3339
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
@@ -38,7 +42,7 @@ type CloudStorageType string
 
 const (
 	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
-	//CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
+	CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
 )
 
 type CloudStorageConnectionOptions struct {
@@ -73,9 +77,19 @@ func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudSt
 			default:
 				return nil, errors.New("one of UseManagedIdentity, UseConnectionString, or UseSASToken must be true")
 			}
-			return proxy, err
+		}
+	case CloudStorageTypeAWSS3:
+		{
+			switch {
+			case options.UseManagedIdentity:
+				proxy, err = newAWSCloudStorageProxyFromIdentity(options.AccountURL)
+			default:
+				return nil, errors.New("unsupported configuration for AWS client")
+			}
+
 		}
 	default:
 		return nil, errors.New("unknown cloud storage type")
 	}
+	return proxy, err
 }

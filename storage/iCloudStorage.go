@@ -11,6 +11,7 @@ import (
 const max_RESULT int = 500
 const time_FORMAT string = time.RFC3339
 const size_5MiB = 5242880
+const max_PARTS = 10000
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
@@ -23,7 +24,7 @@ type CloudStorageProxy interface {
 		content string) error
 	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		inputStream io.Reader, fileSizeBytes int64) error
-	//DeleteFile(ctx context.Context, containerName string, fileName string) error
+	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
 type blobListType string
 

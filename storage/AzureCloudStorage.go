@@ -195,7 +195,8 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 	inputStream io.Reader, fileSizeBytes int64) error {
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, inputStream, &azblob.UploadStreamOptions{
-		Metadata: writeMetadata(metadata),
+		Concurrency: 5,
+		Metadata:    writeMetadata(metadata),
 	})
 	if err != nil {
 		return wrapError("unable to save file from input stream", err)

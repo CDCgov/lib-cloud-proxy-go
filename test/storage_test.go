@@ -9,10 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"lib-cloud-proxy-go/storage"
 	"os"
+	"strings"
 	"testing"
 )
 
 var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
+
+//var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
 
 func initTests() {
 	err := godotenv.Load(".env_" + string(cloudStorageTypeToTest))
@@ -219,7 +222,7 @@ func TestUploadText(t *testing.T) {
 func TestUploadStream(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		file, err := os.Open("test.HL7")
+		file, err := os.Open("jdk.zip")
 		if err == nil {
 			fileInfo, err := file.Stat()
 			var fileSize int64
@@ -228,6 +231,7 @@ func TestUploadStream(t *testing.T) {
 			} else {
 				fileSize = 1
 			}
+			fmt.Printf("file size: %d \n", fileSize)
 			metadata := map[string]string{
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
@@ -252,28 +256,25 @@ func TestUploadStream(t *testing.T) {
 
 }
 
-//func TestDeleteFile(t *testing.T) {
-//	initTests()
-//	connectionString := os.Getenv("ConnectionString")
-//	az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-//		storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
-//	if err == nil {
-//		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload.HL7")
-//		if er != nil {
-//			printCloudError(er)
-//			var cloudError *storage.CloudStorageError
-//			if errors.As(er, &cloudError) {
-//				inner := cloudError.Unwrap()
-//				if strings.Contains(inner.Error(), "RESPONSE 404") {
-//					// blob does not exist -- fine
-//					assert.Truef(t, true, "succeeded")
-//				} else {
-//					assert.Fail(t, "failed")
-//				}
-//			}
-//		} else {
-//			println("Success")
-//			assert.Truef(t, true, "succeeded")
-//		}
-//	}
-//}
+func TestDeleteFile(t *testing.T) {
+	az, err := getProxy()
+	if err == nil {
+		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload.HL7")
+		if er != nil {
+			printCloudError(er)
+			var cloudError *storage.CloudStorageError
+			if errors.As(er, &cloudError) {
+				inner := cloudError.Unwrap()
+				if strings.Contains(inner.Error(), "RESPONSE 404") {
+					// blob does not exist -- fine
+					assert.Truef(t, true, "succeeded")
+				} else {
+					assert.Fail(t, "failed")
+				}
+			}
+		} else {
+			println("Success")
+			assert.Truef(t, true, "succeeded")
+		}
+	}
+}

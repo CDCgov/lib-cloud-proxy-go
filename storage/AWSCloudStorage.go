@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-const max_PARTS = 10000
-
 type AWSCloudStorageProxy struct {
 	s3ServicesClient *s3.Client
 }
@@ -116,15 +114,17 @@ func (aw *AWSCloudStorageProxy) SaveFileFromText(ctx context.Context, containerN
 func (aw *AWSCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 	inputStream io.Reader, fileSizeBytes int64) error {
 	var uploader *manager.Uploader
-	if fileSizeBytes < size_5MiB*max_PARTS {
-		uploader = manager.NewUploader(aw.s3ServicesClient)
-	} else {
-		// we need to increase the Part size -- default is 5 MiB
-		partSize := fileSizeBytes / max_PARTS
-		uploader = manager.NewUploader(aw.s3ServicesClient, func(u *manager.Uploader) {
-			u.PartSize = partSize
-		})
+	var partSize int64
+	partSize = size_5MiB
+	if fileSizeBytes > size_5MiB*max_PARTS {
+		// we need to increase the Part size
+		partSize = fileSizeBytes / max_PARTS
 	}
+	uploader = manager.NewUploader(aw.s3ServicesClient, func(u *manager.Uploader) {
+		u.PartSize = partSize
+		u.Concurrency = 5
+	})
+
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:   aws.String(containerName),
 		Key:      aws.String(fileName),
@@ -137,4 +137,13 @@ func (aw *AWSCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, con
 	return nil
 }
 
-//DeleteFile(ctx context.Context, containerName string, fileName string) error
+func (aw *AWSCloudStorageProxy) DeleteFile(ctx context.Context, containerName string, fileName string) error {
+	_, err := aw.s3ServicesClient.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(fileName),
+	})
+	if err != nil {
+		return wrapError("unable to delete file "+fileName, err)
+	}
+	return nil
+}

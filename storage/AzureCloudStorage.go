@@ -53,13 +53,6 @@ func newAzureCloudStorageProxyFromSASToken(token string) (*AzureCloudStorageProx
 	}
 }
 
-type blobListType string
-
-const (
-	listTypeFile   blobListType = "FILE"
-	listTypeFolder blobListType = "FOLDER"
-)
-
 func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, containerName string,
 	maxNumber int, prefix string, listType blobListType) ([]string, error) {
 	if maxNumber <= 0 {
@@ -200,7 +193,7 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 }
 
 func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	inputStream io.Reader) error {
+	inputStream io.Reader, fileSizeBytes int64) error {
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, inputStream, &azblob.UploadStreamOptions{
 		Metadata: writeMetadata(metadata),
 	})

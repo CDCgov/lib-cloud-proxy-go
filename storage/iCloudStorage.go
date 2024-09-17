@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/net/context"
-	"io"
 	"time"
 )
 
@@ -13,16 +12,16 @@ const time_FORMAT string = time.RFC3339
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
-	ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
-	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
-	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
-	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
-	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
-	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-		content string) error
-	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-		inputStream io.Reader) error
-	DeleteFile(ctx context.Context, containerName string, fileName string) error
+	//ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
+	//GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
+	//GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
+	//GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
+	//GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
+	//SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+	//	content string) error
+	//SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+	//	inputStream io.Reader) error
+	//DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
 
 type CloudStorageError struct {

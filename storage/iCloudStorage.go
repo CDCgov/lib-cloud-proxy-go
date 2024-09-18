@@ -19,7 +19,7 @@ type CloudStorageProxy interface {
 	//GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
 	//GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
 	//GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
-	//GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
+	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,

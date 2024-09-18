@@ -13,15 +13,17 @@ import (
 	"testing"
 )
 
-//var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
+var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
+var container = ""
 
-var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
+//var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
 
 func initTests() {
 	err := godotenv.Load(".env_" + string(cloudStorageTypeToTest))
 	if err != nil {
 		fmt.Println("Unable to load .env_" + string(cloudStorageTypeToTest))
 	}
+	container = os.Getenv("ContainerName")
 }
 
 func getProxy() (storage.CloudStorageProxy, error) {
@@ -86,7 +88,7 @@ func TestInitFromIdentity(t *testing.T) {
 func TestListFiles(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		files, err := az.ListFiles(context.Background(), "reports-test", 10, "testFolder/")
+		files, err := az.ListFiles(context.Background(), container, 10, "")
 		if err == nil {
 			fmt.Printf("Number of files found: %d \n", len(files))
 			for _, file := range files {
@@ -108,7 +110,7 @@ func TestListFiles(t *testing.T) {
 func TestListFolders(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		folders, err := az.ListFolders(context.Background(), "reports-test", 10, "testFolder")
+		folders, err := az.ListFolders(context.Background(), container, 10, "testFolder")
 		fmt.Printf("Number of folders found: %d \n", len(folders))
 		if err == nil {
 			for _, folder := range folders {
@@ -126,35 +128,32 @@ func TestListFolders(t *testing.T) {
 	}
 }
 
-//	func TestGetMetadata(t *testing.T) {
-//		initTests()
-//		connectionString := os.Getenv("ConnectionString")
-//		az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-//			storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
-//		if err == nil {
-//			metadata, e := az.GetMetadata(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
-//			if e == nil {
-//				fmt.Println("Success")
-//				fmt.Println(metadata)
-//				assert.Truef(t, true, "succeeded")
-//			} else {
-//				printCloudError(err)
-//				assert.Fail(t, "failed")
-//			}
-//		} else {
-//			fmt.Println("could not get proxy:")
-//			printCloudError(err)
-//			assert.Fail(t, "failed")
-//		}
-//	}
-//
+func TestGetMetadata(t *testing.T) {
+	az, err := getProxy()
+	if err == nil {
+		metadata, e := az.GetMetadata(context.Background(), container, "testFolder/test-fldr-upload.HL7")
+		if e == nil {
+			fmt.Println("Success")
+			fmt.Println(metadata)
+			assert.Truef(t, true, "succeeded")
+		} else {
+			printCloudError(err)
+			assert.Fail(t, "failed")
+		}
+	} else {
+		fmt.Println("could not get proxy:")
+		printCloudError(err)
+		assert.Fail(t, "failed")
+	}
+}
+
 //	func TestGetFileContent(t *testing.T) {
 //		initTests()
 //		connectionString := os.Getenv("ConnectionString")
 //		az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
 //			storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
 //		if err == nil {
-//			content, err := az.GetFileContent(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+//			content, err := az.GetFileContent(context.Background(), container, "/demo/AL_COVID19_test1.txt")
 //			if err == nil {
 //				fmt.Println("Success")
 //				fmt.Println(content)
@@ -175,7 +174,7 @@ func TestListFolders(t *testing.T) {
 //		az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
 //			storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
 //		if az != nil {
-//			cloudFile, err := az.GetFile(context.Background(), "hl7ingress", "/demo/AL_COVID19_test1.txt")
+//			cloudFile, err := az.GetFile(context.Background(), container, "/demo/AL_COVID19_test1.txt")
 //			if err == nil {
 //				fmt.Println("Success")
 //				fmt.Println(cloudFile.Metadata)
@@ -198,7 +197,7 @@ func TestUploadText(t *testing.T) {
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
 			}
-			e := az.SaveFileFromText(context.Background(), "reports-test",
+			e := az.SaveFileFromText(context.Background(), container,
 				"testFolder/test-fldr-upload.HL7",
 				metadata, string(content))
 			if e != nil {
@@ -235,7 +234,7 @@ func TestUploadStream(t *testing.T) {
 				"data_stream_id": "DAART",
 			}
 			reader := bufio.NewReader(file)
-			e := az.SaveFileFromInputStream(context.Background(), "reports-test", "test-stream-upload",
+			e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-upload",
 				metadata, reader, fileSize)
 			if e != nil {
 				printCloudError(e)
@@ -257,7 +256,7 @@ func TestUploadStream(t *testing.T) {
 func TestDeleteFile(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload")
+		er := az.DeleteFile(context.Background(), container, "test-stream-upload")
 		if er != nil {
 			printCloudError(er)
 			var cloudError *storage.CloudStorageError

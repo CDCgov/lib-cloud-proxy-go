@@ -95,9 +95,23 @@ func (aw *AWSCloudStorageProxy) ListFolders(ctx context.Context, containerName s
 // GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
 // GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
 // GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
-// GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
-func (aw *AWSCloudStorageProxy) SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	content string) error {
+func (aw *AWSCloudStorageProxy) GetMetadata(ctx context.Context, containerName string,
+	fileName string) (map[string]string, error) {
+	resp, err := aw.s3ServicesClient.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(fileName),
+	})
+	if err == nil {
+		metadata := resp.Metadata
+		metadata["last_modified"] = resp.LastModified.Format(time_FORMAT)
+		return metadata, nil
+	} else {
+		return nil, wrapError("unable to get metadata for object "+fileName, err)
+	}
+}
+
+func (aw *AWSCloudStorageProxy) SaveFileFromText(ctx context.Context, containerName string, fileName string,
+	metadata map[string]string, content string) error {
 	contentReader := strings.NewReader(content)
 	_, err := aw.s3ServicesClient.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:   aws.String(containerName),

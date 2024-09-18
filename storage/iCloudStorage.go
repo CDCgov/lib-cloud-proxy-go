@@ -16,9 +16,9 @@ const max_PARTS = 10000
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
-	//GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
-	//GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
-	//GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
+	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
+	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
+	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error

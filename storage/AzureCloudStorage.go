@@ -133,7 +133,7 @@ func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context,
 	}
 }
 
-func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error) {
+func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error) {
 	streamResp, err := az.blobServiceClient.DownloadStream(ctx, containerName, fileName, nil)
 	if err == nil {
 		return streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{}), nil

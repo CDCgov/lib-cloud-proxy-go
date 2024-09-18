@@ -91,10 +91,56 @@ func (aw *AWSCloudStorageProxy) ListFolders(ctx context.Context, containerName s
 	prefix string) ([]string, error) {
 	return aw.listFilesOrFolders(ctx, containerName, maxNumber, prefix, listTypeFolder)
 }
+func (aw *AWSCloudStorageProxy) getFileContentAndMetadata(ctx context.Context, containerName string, fileName string,
+	includeMetadata bool) (string, map[string]string, error) {
+	var metadata map[string]string
+	resp, err := aw.s3ServicesClient.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(fileName),
+	})
+	if err == nil {
+		if includeMetadata {
+			metadata = resp.Metadata
+			metadata["last_modified"] = resp.LastModified.Format(time_FORMAT)
+		}
 
-// GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
-// GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
-// GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
+		defer resp.Body.Close()
+		content, er := io.ReadAll(resp.Body)
+		if er != nil {
+			return "", metadata, wrapError("unable to read message body of file "+fileName, er)
+		}
+		return string(content), metadata, nil
+	}
+	return "", metadata, wrapError("unable to get file "+fileName, err)
+}
+
+func (aw *AWSCloudStorageProxy) GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error) {
+	content, metadata, err := aw.getFileContentAndMetadata(ctx, containerName, fileName, true)
+	cloudFile := CloudFile{
+		Container: containerName,
+		FileName:  fileName,
+		Metadata:  metadata,
+		Content:   content,
+	}
+	return cloudFile, err
+}
+
+func (aw *AWSCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+	content, _, err := aw.getFileContentAndMetadata(ctx, containerName, fileName, false)
+	return content, err
+}
+
+func (aw *AWSCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error) {
+	resp, err := aw.s3ServicesClient.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(containerName),
+		Key:    aws.String(fileName),
+	})
+	if err == nil {
+		return resp.Body, nil
+	}
+	return nil, wrapError("unable to get stream reader for file "+fileName, err)
+}
+
 func (aw *AWSCloudStorageProxy) GetMetadata(ctx context.Context, containerName string,
 	fileName string) (map[string]string, error) {
 	resp, err := aw.s3ServicesClient.HeadObject(ctx, &s3.HeadObjectInput{

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"lib-cloud-proxy-go/storage"
 	"os"
 	"strings"
@@ -59,32 +60,6 @@ func printCloudError(err error) {
 	}
 }
 
-func TestInitFromIdentity(t *testing.T) {
-	initTests()
-	accountURL := os.Getenv("AccountURL")
-	_, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-		storage.CloudStorageConnectionOptions{UseManagedIdentity: true, AccountURL: accountURL})
-	if err != nil {
-		printCloudError(err)
-		assert.Fail(t, "failed")
-	} else {
-		assert.Truef(t, true, "Success")
-	}
-}
-
-//	func TestInitFromSASToken(t *testing.T) {
-//		initTests()
-//		token := os.Getenv("URLWithSASToken")
-//		_, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-//			storage.CloudStorageConnectionOptions{UseSASToken: true, URLWithSASToken: token})
-//		if err != nil {
-//			printCloudError(err)
-//			assert.Fail(t, "failed")
-//		} else {
-//			fmt.Println("Success")
-//			assert.Truef(t, true, "succeeded")
-//		}
-//	}
 func TestListFiles(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
@@ -147,47 +122,67 @@ func TestGetMetadata(t *testing.T) {
 	}
 }
 
-//	func TestGetFileContent(t *testing.T) {
-//		initTests()
-//		connectionString := os.Getenv("ConnectionString")
-//		az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-//			storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
-//		if err == nil {
-//			content, err := az.GetFileContent(context.Background(), container, "/demo/AL_COVID19_test1.txt")
-//			if err == nil {
-//				fmt.Println("Success")
-//				fmt.Println(content)
-//				assert.Truef(t, true, "succeeded")
-//			} else {
-//				printCloudError(err)
-//				assert.Fail(t, "failed")
-//			}
-//		} else {
-//			printCloudError(err)
-//			assert.Fail(t, "failed")
-//		}
-//	}
-//
-//	func TestGetFile(t *testing.T) {
-//		initTests()
-//		connectionString := os.Getenv("ConnectionString")
-//		az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-//			storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
-//		if az != nil {
-//			cloudFile, err := az.GetFile(context.Background(), container, "/demo/AL_COVID19_test1.txt")
-//			if err == nil {
-//				fmt.Println("Success")
-//				fmt.Println(cloudFile.Metadata)
-//				assert.Truef(t, true, "succeeded")
-//			} else {
-//				printCloudError(err)
-//				assert.Fail(t, "failed")
-//			}
-//		} else {
-//			printCloudError(err)
-//			assert.Fail(t, "failed")
-//		}
-//	}
+func TestGetFileContent(t *testing.T) {
+	az, err := getProxy()
+	if err == nil {
+		content, err := az.GetFileContent(context.Background(), container, "test-stream-upload")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(content)
+			assert.Truef(t, true, "succeeded")
+		} else {
+			printCloudError(err)
+			assert.Fail(t, "failed")
+		}
+	} else {
+		printCloudError(err)
+		assert.Fail(t, "failed")
+	}
+}
+
+func TestGetFileContentAsInputStream(t *testing.T) {
+	az, err := getProxy()
+	if err == nil {
+		readCloser, err := az.GetFileContentAsInputStream(context.Background(), container, "test-stream-upload")
+		if err == nil {
+			defer readCloser.Close()
+			content, er := io.ReadAll(readCloser)
+			if er == nil {
+				println("Success")
+				assert.Truef(t, true, "succeeded")
+				println(string(content))
+			} else {
+				printCloudError(err)
+				assert.Fail(t, "failed")
+			}
+		} else {
+			printCloudError(err)
+			assert.Fail(t, "failed")
+		}
+	} else {
+		printCloudError(err)
+		assert.Fail(t, "failed")
+	}
+}
+
+func TestGetFile(t *testing.T) {
+	az, err := getProxy()
+	if az != nil {
+		cloudFile, err := az.GetFile(context.Background(), container, "testFolder/test-fldr-upload.HL7")
+		if err == nil {
+			fmt.Println("Success")
+			fmt.Println(cloudFile.Metadata)
+			fmt.Println(cloudFile.Content)
+			assert.Truef(t, true, "succeeded")
+		} else {
+			printCloudError(err)
+			assert.Fail(t, "failed")
+		}
+	} else {
+		printCloudError(err)
+		assert.Fail(t, "failed")
+	}
+}
 func TestUploadText(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {

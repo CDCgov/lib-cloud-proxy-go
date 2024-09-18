@@ -10,19 +10,10 @@ import (
 	"io"
 	"lib-cloud-proxy-go/util"
 	"strings"
-	"time"
 )
-
-// implements iCloudStorageReader
-const max_RESULT int = 500
-const time_FORMAT string = time.RFC3339
 
 type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
-}
-
-func wrapError(msg string, err error) *CloudStorageError {
-	return &CloudStorageError{message: msg, internalError: err}
 }
 
 func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
@@ -57,13 +48,6 @@ func newAzureCloudStorageProxyFromSASToken(token string) (*AzureCloudStorageProx
 			"url with SAS token", err)
 	}
 }
-
-type blobListType string
-
-const (
-	listTypeFile   blobListType = "FILE"
-	listTypeFolder blobListType = "FOLDER"
-)
 
 func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, containerName string,
 	maxNumber int, prefix string, listType blobListType) ([]string, error) {
@@ -149,7 +133,7 @@ func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context,
 	}
 }
 
-func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error) {
+func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error) {
 	streamResp, err := az.blobServiceClient.DownloadStream(ctx, containerName, fileName, nil)
 	if err == nil {
 		return streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{}), nil
@@ -205,9 +189,10 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 }
 
 func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	inputStream io.Reader) error {
+	inputStream io.Reader, fileSizeBytes int64) error {
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, inputStream, &azblob.UploadStreamOptions{
-		Metadata: writeMetadata(metadata),
+		Concurrency: 5,
+		Metadata:    writeMetadata(metadata),
 	})
 	if err != nil {
 		return wrapError("unable to save file from input stream", err)

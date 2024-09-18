@@ -5,21 +5,41 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"io"
+	"time"
 )
+
+const max_RESULT int = 500
+const time_FORMAT string = time.RFC3339
+const size_5MiB = 5242880
+const max_PARTS = 10000
 
 type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
 	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
-	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.Reader, error)
+	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-		inputStream io.Reader) error
+		inputStream io.Reader, fileSizeBytes int64) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
+
+type CloudStorageType string
+
+const (
+	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
+	CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
+)
+
+type blobListType string
+
+const (
+	listTypeFile   blobListType = "FILE"
+	listTypeFolder blobListType = "FOLDER"
+)
 
 type CloudStorageError struct {
 	message       string
@@ -34,12 +54,9 @@ func (err *CloudStorageError) Unwrap() error {
 	return err.internalError
 }
 
-type CloudStorageType string
-
-const (
-	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
-	//CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
-)
+func wrapError(msg string, err error) *CloudStorageError {
+	return &CloudStorageError{message: msg, internalError: err}
+}
 
 type CloudStorageConnectionOptions struct {
 	UseManagedIdentity  bool
@@ -73,9 +90,19 @@ func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudSt
 			default:
 				return nil, errors.New("one of UseManagedIdentity, UseConnectionString, or UseSASToken must be true")
 			}
-			return proxy, err
+		}
+	case CloudStorageTypeAWSS3:
+		{
+			switch {
+			case options.UseManagedIdentity:
+				proxy, err = newAWSCloudStorageProxyFromIdentity(options.AccountURL)
+			default:
+				return nil, errors.New("unsupported configuration for AWS client")
+			}
+
 		}
 	default:
 		return nil, errors.New("unknown cloud storage type")
 	}
+	return proxy, err
 }

@@ -13,9 +13,9 @@ import (
 	"testing"
 )
 
-var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
+//var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
 
-//var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
+/var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
 
 func initTests() {
 	err := godotenv.Load(".env_" + string(cloudStorageTypeToTest))
@@ -86,7 +86,7 @@ func TestInitFromIdentity(t *testing.T) {
 func TestListFiles(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		files, err := az.ListFiles(context.Background(), "reports-test", 10, "")
+		files, err := az.ListFiles(context.Background(), "reports-test", 10, "testFolder/")
 		if err == nil {
 			fmt.Printf("Number of files found: %d \n", len(files))
 			for _, file := range files {
@@ -108,7 +108,7 @@ func TestListFiles(t *testing.T) {
 func TestListFolders(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		folders, err := az.ListFolders(context.Background(), "reports-test", 10, "")
+		folders, err := az.ListFolders(context.Background(), "reports-test", 10, "testFolder")
 		fmt.Printf("Number of folders found: %d \n", len(folders))
 		if err == nil {
 			for _, folder := range folders {
@@ -190,10 +190,7 @@ func TestListFolders(t *testing.T) {
 //		}
 //	}
 func TestUploadText(t *testing.T) {
-	initTests()
-	accountURL := os.Getenv("AccountURL")
-	az, err := storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
-		storage.CloudStorageConnectionOptions{UseManagedIdentity: true, AccountURL: accountURL})
+	az, err := getProxy()
 	if err == nil {
 		content, err := os.ReadFile("test.HL7")
 		if err == nil {
@@ -201,7 +198,8 @@ func TestUploadText(t *testing.T) {
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
 			}
-			e := az.SaveFileFromText(context.Background(), "reports-test", "testFolder/test-fldr-upload.HL7",
+			e := az.SaveFileFromText(context.Background(), "reports-test",
+				"testFolder/test-fldr-upload.HL7",
 				metadata, string(content))
 			if e != nil {
 				printCloudError(e)
@@ -222,7 +220,7 @@ func TestUploadText(t *testing.T) {
 func TestUploadStream(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		file, err := os.Open("jdk.zip")
+		file, err := os.Open("test.hl7")
 		if err == nil {
 			fileInfo, err := file.Stat()
 			var fileSize int64
@@ -237,7 +235,7 @@ func TestUploadStream(t *testing.T) {
 				"data_stream_id": "DAART",
 			}
 			reader := bufio.NewReader(file)
-			e := az.SaveFileFromInputStream(context.Background(), "reports-test", "test-stream-upload.HL7",
+			e := az.SaveFileFromInputStream(context.Background(), "reports-test", "test-stream-upload",
 				metadata, reader, fileSize)
 			if e != nil {
 				printCloudError(e)
@@ -259,13 +257,13 @@ func TestUploadStream(t *testing.T) {
 func TestDeleteFile(t *testing.T) {
 	az, err := getProxy()
 	if err == nil {
-		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload.HL7")
+		er := az.DeleteFile(context.Background(), "reports-test", "test-stream-upload")
 		if er != nil {
 			printCloudError(er)
 			var cloudError *storage.CloudStorageError
 			if errors.As(er, &cloudError) {
 				inner := cloudError.Unwrap()
-				if strings.Contains(inner.Error(), "RESPONSE 404") {
+				if strings.Contains(inner.Error(), "404") {
 					// blob does not exist -- fine
 					assert.Truef(t, true, "succeeded")
 				} else {

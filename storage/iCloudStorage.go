@@ -26,6 +26,14 @@ type CloudStorageProxy interface {
 		inputStream io.Reader, fileSizeBytes int64) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
+
+type CloudStorageType string
+
+const (
+	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
+	CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
+)
+
 type blobListType string
 
 const (
@@ -46,12 +54,9 @@ func (err *CloudStorageError) Unwrap() error {
 	return err.internalError
 }
 
-type CloudStorageType string
-
-const (
-	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
-	CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
-)
+func wrapError(msg string, err error) *CloudStorageError {
+	return &CloudStorageError{message: msg, internalError: err}
+}
 
 type CloudStorageConnectionOptions struct {
 	UseManagedIdentity  bool

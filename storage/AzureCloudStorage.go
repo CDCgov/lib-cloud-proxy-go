@@ -16,10 +16,6 @@ type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
 }
 
-func wrapError(msg string, err error) *CloudStorageError {
-	return &CloudStorageError{message: msg, internalError: err}
-}
-
 func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {

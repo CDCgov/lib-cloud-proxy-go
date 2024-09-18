@@ -15,7 +15,7 @@ import (
 
 //var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
 
-/var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
+var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
 
 func initTests() {
 	err := godotenv.Load(".env_" + string(cloudStorageTypeToTest))

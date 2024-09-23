@@ -64,7 +64,7 @@ type CloudStorageConnectionOptions struct {
 	UseSASToken         bool
 	AccountURL          string
 	ConnectionString    string
-	URLWithSASToken     string
+	AccountKey          string
 }
 
 func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudStorageConnectionOptions) (CloudStorageProxy, error) {
@@ -72,8 +72,8 @@ func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudSt
 		return nil, errors.New("if using managed identity, AccountURL is required")
 	} else if options.UseConnectionString && options.ConnectionString == "" {
 		return nil, errors.New("if using connection string, ConnectionString is required")
-	} else if options.UseSASToken && options.URLWithSASToken == "" {
-		return nil, errors.New("if using SAS token, URLWithSASToken is required")
+	} else if options.UseSASToken && (options.AccountURL == "" || options.AccountKey == "") {
+		return nil, errors.New("if using SAS token, AccountURL and AccountKey are required")
 	}
 	var err error
 	var proxy CloudStorageProxy
@@ -86,7 +86,7 @@ func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudSt
 			case options.UseConnectionString:
 				proxy, err = newAzureCloudStorageProxyFromConnectionString(options.ConnectionString)
 			case options.UseSASToken:
-				proxy, err = newAzureCloudStorageProxyFromSASToken(options.URLWithSASToken)
+				proxy, err = newAzureCloudStorageProxyFromSASToken(options.AccountURL, options.AccountKey)
 			default:
 				return nil, errors.New("one of UseManagedIdentity, UseConnectionString, or UseSASToken must be true")
 			}

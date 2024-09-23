@@ -359,3 +359,21 @@ func TestCopyS3FileToAzureStream(t *testing.T) {
 		}
 	}
 }
+
+func TestGetAzureClientFromSAS(t *testing.T) {
+	initTests()
+	azureAccountURL := os.Getenv("AzureAccountURL")
+	azureAccountKey := os.Getenv("AzureAccountKey")
+	_, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure, storage.CloudStorageConnectionOptions{
+		UseSASToken: true,
+		AccountURL:  azureAccountURL,
+		AccountKey:  azureAccountKey,
+	})
+	if err != nil {
+		assert.Fail(t, "failed")
+		printCloudError(err)
+	} else {
+		assert.True(t, true, "succeeded")
+		println("Successfully got sas client")
+	}
+}

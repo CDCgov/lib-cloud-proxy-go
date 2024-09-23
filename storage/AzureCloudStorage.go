@@ -6,11 +6,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type AzureCloudStorageProxy struct {
@@ -40,8 +42,37 @@ func newAzureCloudStorageProxyFromConnectionString(connectionString string) (*Az
 	}
 }
 
-func newAzureCloudStorageProxyFromSASToken(token string) (*AzureCloudStorageProxy, error) {
-	client, err := azblob.NewClientWithNoCredential(token, nil)
+func newAzureCloudStorageProxyFromSASToken(accountURL string, accountKey string) (*AzureCloudStorageProxy, error) {
+	//accountURL := fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
+	accountName1, _ := strings.CutPrefix(accountURL, "https://")
+	accountName := strings.Split(accountName1, ".blob")[0]
+
+	cred, _ := azblob.NewSharedKeyCredential(accountName, accountKey)
+	credClient, err := azblob.NewClientWithSharedKeyCredential(accountURL, cred, nil)
+	sasURL, err := credClient.ServiceClient().GetSASURL(
+		sas.AccountResourceTypes{
+			Service:   true,
+			Container: true,
+			Object:    true,
+		},
+		sas.AccountPermissions{
+			Read:                  true,
+			Write:                 true,
+			Delete:                true,
+			DeletePreviousVersion: true,
+			PermanentDelete:       true,
+			List:                  true,
+			Add:                   true,
+			Create:                true,
+			Update:                true,
+			Process:               true,
+			Tag:                   true,
+		},
+		time.Now().Add(48*time.Hour),
+		nil,
+	)
+
+	client, err := azblob.NewClientWithNoCredential(sasURL, nil)
 	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
 	} else {
@@ -216,3 +247,10 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 	}
 	return nil
 }
+
+//func (az *AzureCloudStorageProxy) CopyFromAWS(ctx context.Context, fromURL string, toURL string) error {
+//	cooked := cmd.CookedCopyCmdArgs{
+//		Source: common.ResourceString{},
+//	}
+//	cooked.
+//}

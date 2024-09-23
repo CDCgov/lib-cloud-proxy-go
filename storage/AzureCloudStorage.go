@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
+	"strconv"
 	"strings"
 )
 
@@ -123,6 +124,7 @@ func (az *AzureCloudStorageProxy) getFileContentAndMetadata(ctx context.Context,
 	} else {
 		metadata = readMetadata(streamResp.Metadata)
 		metadata["last_modified"] = streamResp.LastModified.Format(time_FORMAT)
+		metadata["content_length"] = strconv.Itoa(int(*streamResp.ContentLength))
 		data := bytes.Buffer{}
 		retryReader := streamResp.NewRetryReader(ctx, &azblob.RetryReaderOptions{})
 		_, err := data.ReadFrom(retryReader)
@@ -149,6 +151,7 @@ func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName
 	if err == nil {
 		props = readMetadata(resp.Metadata)
 		props["last_modified"] = resp.LastModified.Format(time_FORMAT)
+		props["content_length"] = strconv.Itoa(int(*resp.ContentLength))
 	} else {
 		return props, wrapError("Error getting blob metadata", err)
 	}
@@ -189,9 +192,14 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 }
 
 func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	inputStream io.Reader, fileSizeBytes int64) error {
+	inputStream io.Reader, fileSizeBytes int64, concurrency int) error {
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, inputStream, &azblob.UploadStreamOptions{
-		Concurrency: 5,
+		BlockSize:   size_5MiB,
+		Concurrency: concurrency,
 		Metadata:    writeMetadata(metadata),
 	})
 	if err != nil {

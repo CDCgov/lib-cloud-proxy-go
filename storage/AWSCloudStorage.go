@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -102,6 +103,7 @@ func (aw *AWSCloudStorageProxy) getFileContentAndMetadata(ctx context.Context, c
 		if includeMetadata {
 			metadata = resp.Metadata
 			metadata["last_modified"] = resp.LastModified.Format(time_FORMAT)
+			metadata["content_length"] = strconv.Itoa(int(*resp.ContentLength))
 		}
 
 		defer resp.Body.Close()
@@ -150,6 +152,7 @@ func (aw *AWSCloudStorageProxy) GetMetadata(ctx context.Context, containerName s
 	if err == nil {
 		metadata := resp.Metadata
 		metadata["last_modified"] = resp.LastModified.Format(time_FORMAT)
+		metadata["content_length"] = strconv.Itoa(int(*resp.ContentLength))
 		return metadata, nil
 	} else {
 		return nil, wrapError("unable to get metadata for object "+fileName, err)
@@ -172,17 +175,21 @@ func (aw *AWSCloudStorageProxy) SaveFileFromText(ctx context.Context, containerN
 }
 
 func (aw *AWSCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-	inputStream io.Reader, fileSizeBytes int64) error {
+	inputStream io.Reader, fileSizeBytes int64, concurrency int) error {
 	var uploader *manager.Uploader
 	var partSize int64
 	partSize = size_5MiB
+	if concurrency <= 0 {
+		concurrency = 5
+	}
 	if fileSizeBytes > size_5MiB*max_PARTS {
 		// we need to increase the Part size
 		partSize = fileSizeBytes / max_PARTS
 	}
 	uploader = manager.NewUploader(aw.s3ServicesClient, func(u *manager.Uploader) {
 		u.PartSize = partSize
-		u.Concurrency = 5
+		u.Concurrency = concurrency
+		u.BufferProvider = manager.NewBufferedReadSeekerWriteToPool(int(partSize))
 	})
 
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{

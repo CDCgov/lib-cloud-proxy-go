@@ -23,7 +23,7 @@ type CloudStorageProxy interface {
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-		inputStream io.Reader, fileSizeBytes int64) error
+		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
 

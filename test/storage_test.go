@@ -10,36 +10,39 @@ import (
 	"io"
 	"lib-cloud-proxy-go/storage"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
-var container = ""
+var s3container = ""
+var azureContainer = ""
 
 //var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
 
 func initTests() {
-	err := godotenv.Load(".env_" + string(cloudStorageTypeToTest))
+	err := godotenv.Load(".env")
 	if err != nil {
-		fmt.Println("Unable to load .env_" + string(cloudStorageTypeToTest))
+		fmt.Println("Unable to load .env")
 	}
-	container = os.Getenv("ContainerName")
+	s3container = os.Getenv("S3ContainerName")
+	azureContainer = os.Getenv("AzureContainerName")
 }
 
-func getProxy() (storage.CloudStorageProxy, error) {
+func getProxy(storageType storage.CloudStorageType) (storage.CloudStorageProxy, error) {
 	initTests()
-	switch cloudStorageTypeToTest {
+	switch storageType {
 	case storage.CloudStorageTypeAzure:
 		{
 			connectionString := os.Getenv("ConnectionString")
-			return storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
+			return storage.CloudStorageProxyFactory(storageType,
 				storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
 		}
 	case storage.CloudStorageTypeAWSS3:
 		{
-			accountURL := os.Getenv("AccountURL")
-			return storage.CloudStorageProxyFactory(cloudStorageTypeToTest,
+			accountURL := os.Getenv("S3AccountURL")
+			return storage.CloudStorageProxyFactory(storageType,
 				storage.CloudStorageConnectionOptions{UseManagedIdentity: true, AccountURL: accountURL})
 		}
 	default:
@@ -61,7 +64,8 @@ func printCloudError(err error) {
 }
 
 func TestListFiles(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	container := s3container
 	if err == nil {
 		files, err := az.ListFiles(context.Background(), container, 10, "")
 		if err == nil {
@@ -83,7 +87,8 @@ func TestListFiles(t *testing.T) {
 }
 
 func TestListFolders(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAzure)
+	container := azureContainer
 	if err == nil {
 		folders, err := az.ListFolders(context.Background(), container, 10, "testFolder")
 		fmt.Printf("Number of folders found: %d \n", len(folders))
@@ -104,7 +109,8 @@ func TestListFolders(t *testing.T) {
 }
 
 func TestGetMetadata(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	container := s3container
 	if err == nil {
 		metadata, e := az.GetMetadata(context.Background(), container, "testFolder/test-fldr-upload.HL7")
 		if e == nil {
@@ -123,7 +129,8 @@ func TestGetMetadata(t *testing.T) {
 }
 
 func TestGetFileContent(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAzure)
+	container := azureContainer
 	if err == nil {
 		content, err := az.GetFileContent(context.Background(), container, "test-stream-upload")
 		if err == nil {
@@ -141,7 +148,8 @@ func TestGetFileContent(t *testing.T) {
 }
 
 func TestGetFileContentAsInputStream(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	container := s3container
 	if err == nil {
 		readCloser, err := az.GetFileContentAsInputStream(context.Background(), container, "test-stream-upload")
 		if err == nil {
@@ -166,7 +174,8 @@ func TestGetFileContentAsInputStream(t *testing.T) {
 }
 
 func TestGetFile(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAzure)
+	container := azureContainer
 	if az != nil {
 		cloudFile, err := az.GetFile(context.Background(), container, "testFolder/test-fldr-upload.HL7")
 		if err == nil {
@@ -184,7 +193,8 @@ func TestGetFile(t *testing.T) {
 	}
 }
 func TestUploadText(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	container := s3container
 	if err == nil {
 		content, err := os.ReadFile("test.HL7")
 		if err == nil {
@@ -212,9 +222,10 @@ func TestUploadText(t *testing.T) {
 }
 
 func TestUploadStream(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAzure)
+	container := azureContainer
 	if err == nil {
-		file, err := os.Open("test.hl7")
+		file, err := os.Open("jdk.zip")
 		if err == nil {
 			fileInfo, err := file.Stat()
 			var fileSize int64
@@ -225,12 +236,12 @@ func TestUploadStream(t *testing.T) {
 			}
 			fmt.Printf("file size: %d \n", fileSize)
 			metadata := map[string]string{
-				"upload_id":      "1234567890",
+				"upload_id":      "987654321",
 				"data_stream_id": "DAART",
 			}
 			reader := bufio.NewReader(file)
-			e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-upload",
-				metadata, reader, fileSize)
+			e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-jar",
+				metadata, reader, fileSize, 10)
 			if e != nil {
 				printCloudError(e)
 				assert.Fail(t, "failed")
@@ -249,7 +260,8 @@ func TestUploadStream(t *testing.T) {
 }
 
 func TestDeleteFile(t *testing.T) {
-	az, err := getProxy()
+	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	container := s3container
 	if err == nil {
 		er := az.DeleteFile(context.Background(), container, "test-stream-upload")
 		if er != nil {
@@ -267,6 +279,83 @@ func TestDeleteFile(t *testing.T) {
 		} else {
 			println("Success")
 			assert.Truef(t, true, "succeeded")
+		}
+	}
+}
+
+func TestCopyS3StreamToAzureStream(t *testing.T) {
+	initTests()
+	azureProxy, err := getProxy(storage.CloudStorageTypeAzure)
+	if err != nil {
+		assert.Fail(t, "failure")
+		printCloudError(err)
+	} else {
+		awsProxy, er := getProxy(storage.CloudStorageTypeAWSS3)
+		if er != nil {
+			assert.Fail(t, "failure")
+			printCloudError(er)
+		} else {
+			// copy file from s3 to azure
+			ctx := context.Background()
+			fileData, err := awsProxy.GetMetadata(ctx, s3container, "test-stream-jar")
+			if err != nil {
+				printCloudError(err)
+				assert.Fail(t, "failed")
+			} else {
+				length, _ := strconv.ParseInt(fileData["content_length"], 10, 64)
+				println("length is " + fileData["content_length"])
+				fileStream, e := awsProxy.GetFileContentAsInputStream(ctx, s3container, "test-stream-jar")
+				if e != nil {
+					printCloudError(e)
+					assert.Fail(t, "failed")
+				} else {
+					defer fileStream.Close()
+					err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws1.jar",
+						fileData, fileStream, length, 2)
+					if err != nil {
+						printCloudError(err)
+						assert.Fail(t, "failed")
+					} else {
+						assert.True(t, true, "succeeded")
+					}
+
+				}
+			}
+		}
+	}
+}
+
+func TestCopyS3FileToAzureStream(t *testing.T) {
+	initTests()
+	azureProxy, err := getProxy(storage.CloudStorageTypeAzure)
+	if err != nil {
+		assert.Fail(t, "failure")
+		println("unable to connect to azure: ", err.Error())
+	} else {
+		awsProxy, er := getProxy(storage.CloudStorageTypeAWSS3)
+		if er != nil {
+			assert.Fail(t, "failure")
+			println("unable to connect to AWS: ", err.Error())
+		} else {
+			// copy file from s3 to azure
+			ctx := context.Background()
+			file, e := awsProxy.GetFile(ctx, s3container, "test-stream-jar")
+			if e != nil {
+				println("unable to get file: ", e.Error())
+				assert.Fail(t, "failed")
+			} else {
+				length, _ := strconv.ParseInt(file.Metadata["content_length"], 2, 64)
+				println("length is " + file.Metadata["content_length"])
+				fileStream := strings.NewReader(file.Content)
+				err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws.jar",
+					file.Metadata, fileStream, length, 10)
+				if err != nil {
+					println("unable to copy stream: ", err.Error())
+					assert.Fail(t, "failed")
+				} else {
+					assert.True(t, true, "succeeded")
+				}
+			}
 		}
 	}
 }

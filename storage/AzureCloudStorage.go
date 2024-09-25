@@ -250,7 +250,13 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 
 //func (az *AzureCloudStorageProxy) CopyFromAWS(ctx context.Context, fromURL string, toURL string) error {
 //	cooked := cmd.CookedCopyCmdArgs{
-//		Source: common.ResourceString{},
+//		Source: common.ResourceString{
+//			Value: fromURL,
+//		},
+//		Destination: common.ResourceString{
+//			Value: toURL,
+//		},
+//		FromTo: common.EFromTo.S3Blob(),
 //	}
-//	cooked.
+//	cooked.process()
 //}

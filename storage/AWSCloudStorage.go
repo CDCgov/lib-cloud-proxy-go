@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
@@ -15,8 +16,10 @@ type AWSCloudStorageProxy struct {
 	s3ServicesClient *s3.Client
 }
 
-func newAWSCloudStorageProxyFromIdentity(accountURL string) (*AWSCloudStorageProxy, error) {
-	awsConfig, err := config.LoadDefaultConfig(context.TODO())
+func newAWSCloudStorageProxyFromIdentity(accountURL string, accessID string, accessKey string) (*AWSCloudStorageProxy, error) {
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessID, accessKey, "")),
+	)
 	if err != nil {
 		return nil, wrapError("unable to create AWS service client", err)
 	} else {

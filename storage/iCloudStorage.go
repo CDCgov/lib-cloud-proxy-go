@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"golang.org/x/net/context"
 	"io"
@@ -23,16 +22,9 @@ type CloudStorageProxy interface {
 	SaveFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
-		inputStream io.Reader, fileSizeBytes int64) error
+		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
 }
-
-type CloudStorageType string
-
-const (
-	CloudStorageTypeAzure CloudStorageType = "AZURE_STORAGE"
-	CloudStorageTypeAWSS3 CloudStorageType = "AWS_S3"
-)
 
 type blobListType string
 
@@ -58,51 +50,6 @@ func wrapError(msg string, err error) *CloudStorageError {
 	return &CloudStorageError{message: msg, internalError: err}
 }
 
-type CloudStorageConnectionOptions struct {
-	UseManagedIdentity  bool
-	UseConnectionString bool
-	UseSASToken         bool
-	AccountURL          string
-	ConnectionString    string
-	URLWithSASToken     string
-}
-
-func CloudStorageProxyFactory(cloudStorageType CloudStorageType, options CloudStorageConnectionOptions) (CloudStorageProxy, error) {
-	if options.UseManagedIdentity && options.AccountURL == "" {
-		return nil, errors.New("if using managed identity, AccountURL is required")
-	} else if options.UseConnectionString && options.ConnectionString == "" {
-		return nil, errors.New("if using connection string, ConnectionString is required")
-	} else if options.UseSASToken && options.URLWithSASToken == "" {
-		return nil, errors.New("if using SAS token, URLWithSASToken is required")
-	}
-	var err error
-	var proxy CloudStorageProxy
-	switch cloudStorageType {
-	case CloudStorageTypeAzure:
-		{
-			switch {
-			case options.UseManagedIdentity:
-				proxy, err = newAzureCloudStorageProxyFromIdentity(options.AccountURL)
-			case options.UseConnectionString:
-				proxy, err = newAzureCloudStorageProxyFromConnectionString(options.ConnectionString)
-			case options.UseSASToken:
-				proxy, err = newAzureCloudStorageProxyFromSASToken(options.URLWithSASToken)
-			default:
-				return nil, errors.New("one of UseManagedIdentity, UseConnectionString, or UseSASToken must be true")
-			}
-		}
-	case CloudStorageTypeAWSS3:
-		{
-			switch {
-			case options.UseManagedIdentity:
-				proxy, err = newAWSCloudStorageProxyFromIdentity(options.AccountURL)
-			default:
-				return nil, errors.New("unsupported configuration for AWS client")
-			}
-
-		}
-	default:
-		return nil, errors.New("unknown cloud storage type")
-	}
-	return proxy, err
+func CloudStorageProxyFactory(handler ProxyAuthHandler) (CloudStorageProxy, error) {
+	return handler.createProxy()
 }

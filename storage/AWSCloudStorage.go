@@ -20,15 +20,9 @@ func (handler ProxyAuthHandlerAWSDefaultIdentity) createProxy() (CloudStoragePro
 	awsConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return nil, wrapError("unable to create AWS service client", err)
-	} else {
-		client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
-			if handler.AccountURL != "" {
-				o.UsePathStyle = true
-				o.BaseEndpoint = aws.String(handler.AccountURL)
-			}
-		})
-		return &AWSCloudStorageProxy{s3ServicesClient: client}, nil
 	}
+	return createProxyFromConfig(handler.AccountURL, &awsConfig)
+
 }
 
 func (handler ProxyAuthHandlerAWSConfiguredIdentity) createProxy() (CloudStorageProxy, error) {
@@ -37,15 +31,18 @@ func (handler ProxyAuthHandlerAWSConfiguredIdentity) createProxy() (CloudStorage
 	)
 	if err != nil {
 		return nil, wrapError("unable to create AWS service client", err)
-	} else {
-		client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
-			if handler.AccountURL != "" {
-				o.UsePathStyle = true
-				o.BaseEndpoint = aws.String(handler.AccountURL)
-			}
-		})
-		return &AWSCloudStorageProxy{s3ServicesClient: client}, nil
 	}
+	return createProxyFromConfig(handler.AccountURL, &awsConfig)
+}
+
+func createProxyFromConfig(accountURL string, awsConfig *aws.Config) (CloudStorageProxy, error) {
+	client := s3.NewFromConfig(*awsConfig, func(o *s3.Options) {
+		if accountURL != "" {
+			o.UsePathStyle = true
+			o.BaseEndpoint = aws.String(accountURL)
+		}
+	})
+	return &AWSCloudStorageProxy{s3ServicesClient: client}, nil
 }
 
 func (aw *AWSCloudStorageProxy) listFilesOrFolders(ctx context.Context, containerName string, maxNumber int,

@@ -19,10 +19,10 @@ type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
 }
 
-func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorageProxy, error) {
+func (handler ProxyAuthHandlerAzureIdentity) createProxy() (CloudStorageProxy, error) {
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
-		client, er := azblob.NewClient(accountURL, credential, nil)
+		client, er := azblob.NewClient(handler.AccountURL, credential, nil)
 		if er == nil {
 			return &AzureCloudStorageProxy{blobServiceClient: client}, nil
 		} else {
@@ -32,8 +32,8 @@ func newAzureCloudStorageProxyFromIdentity(accountURL string) (*AzureCloudStorag
 	return nil, err
 }
 
-func newAzureCloudStorageProxyFromConnectionString(connectionString string) (*AzureCloudStorageProxy, error) {
-	client, err := azblob.NewClientFromConnectionString(connectionString, nil)
+func (handler ProxyAuthHandlerAzureConnectionString) createProxy() (CloudStorageProxy, error) {
+	client, err := azblob.NewClientFromConnectionString(handler.ConnectionString, nil)
 	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
 	} else {
@@ -42,13 +42,12 @@ func newAzureCloudStorageProxyFromConnectionString(connectionString string) (*Az
 	}
 }
 
-func newAzureCloudStorageProxyFromSASToken(accountURL string, accountKey string) (*AzureCloudStorageProxy, error) {
-	//accountURL := fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
-	accountName1, _ := strings.CutPrefix(accountURL, "https://")
-	accountName := strings.Split(accountName1, ".blob")[0]
+func (handler ProxyAuthHandlerAzureSASToken) createProxy() (CloudStorageProxy, error) {
+	accountNameTmp, _ := strings.CutPrefix(handler.AccountURL, "https://")
+	accountName := strings.Split(accountNameTmp, ".blob")[0]
 
-	cred, _ := azblob.NewSharedKeyCredential(accountName, accountKey)
-	credClient, err := azblob.NewClientWithSharedKeyCredential(accountURL, cred, nil)
+	cred, _ := azblob.NewSharedKeyCredential(accountName, handler.AccountKey)
+	credClient, err := azblob.NewClientWithSharedKeyCredential(handler.AccountURL, cred, nil)
 	sasURL, err := credClient.ServiceClient().GetSASURL(
 		sas.AccountResourceTypes{
 			Service:   true,
@@ -68,16 +67,16 @@ func newAzureCloudStorageProxyFromSASToken(accountURL string, accountKey string)
 			Process:               true,
 			Tag:                   true,
 		},
-		time.Now().Add(48*time.Hour),
+		time.Now().Add(time.Duration(handler.ExpirationHours)*time.Hour),
 		nil,
 	)
 
 	client, err := azblob.NewClientWithNoCredential(sasURL, nil)
-	if err == nil {
-		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
-	} else {
+	if err != nil {
 		return nil, wrapError("unable to create Azure blob service client from "+
 			"url with SAS token", err)
+	} else {
+		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
 	}
 }
 

@@ -15,40 +15,16 @@ import (
 	"testing"
 )
 
-var cloudStorageTypeToTest = storage.CloudStorageTypeAWSS3
 var s3container = ""
 var azureContainer = ""
 
-//var cloudStorageTypeToTest = storage.CloudStorageTypeAzure
-
-func initTests() {
+func init() {
 	err := godotenv.Load(".env")
 	if err != nil {
 		fmt.Println("Unable to load .env")
 	}
 	s3container = os.Getenv("S3ContainerName")
 	azureContainer = os.Getenv("AzureContainerName")
-}
-
-func getProxy(storageType storage.CloudStorageType) (storage.CloudStorageProxy, error) {
-	initTests()
-	switch storageType {
-	case storage.CloudStorageTypeAzure:
-		{
-			connectionString := os.Getenv("ConnectionString")
-			return storage.CloudStorageProxyFactory(storageType,
-				storage.CloudStorageConnectionOptions{UseConnectionString: true, ConnectionString: connectionString})
-		}
-	case storage.CloudStorageTypeAWSS3:
-		{
-			accountURL := os.Getenv("S3AccountURL")
-			return storage.CloudStorageProxyFactory(storageType,
-				storage.CloudStorageConnectionOptions{UseManagedIdentity: true, AccountURL: accountURL})
-		}
-	default:
-		return nil, errors.New("unknown storage type")
-	}
-
 }
 
 func printCloudError(err error) {
@@ -64,8 +40,10 @@ func printCloudError(err error) {
 }
 
 func TestListFiles(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAWSS3)
-	container := s3container
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
+	container := azureContainer
 	if err == nil {
 		files, err := az.ListFiles(context.Background(), container, 10, "")
 		if err == nil {
@@ -87,10 +65,14 @@ func TestListFiles(t *testing.T) {
 }
 
 func TestListFolders(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAzure)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureSASToken{
+		AccountURL:      os.Getenv("AzureAccountURL"),
+		AccountKey:      os.Getenv("AzureAccountKey"),
+		ExpirationHours: 48,
+	})
 	container := azureContainer
 	if err == nil {
-		folders, err := az.ListFolders(context.Background(), container, 10, "testFolder")
+		folders, err := az.ListFolders(context.Background(), container, 10, "hl7_")
 		fmt.Printf("Number of folders found: %d \n", len(folders))
 		if err == nil {
 			for _, folder := range folders {
@@ -109,7 +91,9 @@ func TestListFolders(t *testing.T) {
 }
 
 func TestGetMetadata(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
 	container := s3container
 	if err == nil {
 		metadata, e := az.GetMetadata(context.Background(), container, "testFolder/test-fldr-upload.HL7")
@@ -129,7 +113,9 @@ func TestGetMetadata(t *testing.T) {
 }
 
 func TestGetFileContent(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAzure)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	container := azureContainer
 	if err == nil {
 		content, err := az.GetFileContent(context.Background(), container, "test-stream-upload")
@@ -148,36 +134,40 @@ func TestGetFileContent(t *testing.T) {
 }
 
 func TestGetFileContentAsInputStream(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAWSS3)
-	container := s3container
-	if err == nil {
-		readCloser, err := az.GetFileContentAsInputStream(context.Background(), container, "test-stream-upload")
-		if err == nil {
+	if az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSConfiguredIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+		AccessID:   os.Getenv("AWS_ACCESS_KEY_ID"),
+		AccessKey:  os.Getenv("AWS_SECRET_ACCESS_KEY"),
+	}); err == nil {
+		container := s3container
+		if readCloser, err := az.GetFileContentAsInputStream(context.Background(),
+			container, "test-stream-upload"); err == nil {
 			defer readCloser.Close()
-			content, er := io.ReadAll(readCloser)
-			if er == nil {
+			if content, err := io.ReadAll(readCloser); err == nil {
 				println("Success")
 				assert.Truef(t, true, "succeeded")
 				println(string(content))
 			} else {
 				printCloudError(err)
-				assert.Fail(t, "failed")
+				assert.Fail(t, "reading content failed")
 			}
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "failed")
+			assert.Fail(t, "getting input stream failed")
 		}
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "failed")
+		assert.Fail(t, "getting proxy failed")
 	}
 }
 
 func TestGetFile(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAzure)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	container := azureContainer
 	if az != nil {
-		cloudFile, err := az.GetFile(context.Background(), container, "testFolder/test-fldr-upload.HL7")
+		cloudFile, err := az.GetFile(context.Background(), container, "test-text-upload.HL7")
 		if err == nil {
 			fmt.Println("Success")
 			fmt.Println(cloudFile.Metadata)
@@ -192,12 +182,14 @@ func TestGetFile(t *testing.T) {
 		assert.Fail(t, "failed")
 	}
 }
+
 func TestUploadText(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
 	container := s3container
 	if err == nil {
-		content, err := os.ReadFile("test.HL7")
-		if err == nil {
+		if content, err := os.ReadFile("test.HL7"); err == nil {
 			metadata := map[string]string{
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
@@ -207,60 +199,60 @@ func TestUploadText(t *testing.T) {
 				metadata, string(content))
 			if e != nil {
 				printCloudError(e)
-				assert.Fail(t, "failed")
+				assert.Fail(t, "upload failed")
 			} else {
 				println("Success")
 			}
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "failed")
+			assert.Fail(t, "read file failed")
 		}
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "failed")
+		assert.Fail(t, "getting proxy failed")
 	}
 }
 
 func TestUploadStream(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAzure)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	container := azureContainer
 	if err == nil {
-		file, err := os.Open("jdk.zip")
+		file, _ := os.Open("test.HL7")
+		fileInfo, err := file.Stat()
+		var fileSize int64
 		if err == nil {
-			fileInfo, err := file.Stat()
-			var fileSize int64
-			if err == nil {
-				fileSize = fileInfo.Size()
-			} else {
-				fileSize = 1
-			}
-			fmt.Printf("file size: %d \n", fileSize)
-			metadata := map[string]string{
-				"upload_id":      "987654321",
-				"data_stream_id": "DAART",
-			}
-			reader := bufio.NewReader(file)
-			e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-jar",
-				metadata, reader, fileSize, 10)
-			if e != nil {
-				printCloudError(e)
-				assert.Fail(t, "failed")
-			} else {
-				println("Success")
-			}
+			fileSize = fileInfo.Size()
 		} else {
-			printCloudError(err)
-			assert.Fail(t, "failed")
+			fileSize = 1
 		}
+		fmt.Printf("file size: %d \n", fileSize)
+		metadata := map[string]string{
+			"upload_id":      "987654321",
+			"data_stream_id": "DAART",
+		}
+		reader := bufio.NewReader(file)
+		e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-test",
+			metadata, reader, fileSize, 10)
+		if e != nil {
+			printCloudError(e)
+			assert.Fail(t, "upload failed")
+		} else {
+			println("Success")
+		}
+
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "failed")
+		assert.Fail(t, "getting proxy failed")
 	}
 
 }
 
 func TestDeleteFile(t *testing.T) {
-	az, err := getProxy(storage.CloudStorageTypeAWSS3)
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
 	container := s3container
 	if err == nil {
 		er := az.DeleteFile(context.Background(), container, "test-stream-upload")
@@ -284,15 +276,18 @@ func TestDeleteFile(t *testing.T) {
 }
 
 func TestCopyS3StreamToAzureStream(t *testing.T) {
-	initTests()
-	azureProxy, err := getProxy(storage.CloudStorageTypeAzure)
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	if err != nil {
-		assert.Fail(t, "failure")
+		assert.Fail(t, "failure getting azure proxy")
 		printCloudError(err)
 	} else {
-		awsProxy, er := getProxy(storage.CloudStorageTypeAWSS3)
+		awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+			AccountURL: os.Getenv("S3AccountURL"),
+		})
 		if er != nil {
-			assert.Fail(t, "failure")
+			assert.Fail(t, "failure getting aws proxy")
 			printCloudError(er)
 		} else {
 			// copy file from s3 to azure
@@ -310,7 +305,7 @@ func TestCopyS3StreamToAzureStream(t *testing.T) {
 					assert.Fail(t, "failed")
 				} else {
 					defer fileStream.Close()
-					err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws1.jar",
+					err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws2.jar",
 						fileData, fileStream, length, 2)
 					if err != nil {
 						printCloudError(err)
@@ -326,23 +321,26 @@ func TestCopyS3StreamToAzureStream(t *testing.T) {
 }
 
 func TestCopyS3FileToAzureStream(t *testing.T) {
-	initTests()
-	azureProxy, err := getProxy(storage.CloudStorageTypeAzure)
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	if err != nil {
-		assert.Fail(t, "failure")
-		println("unable to connect to azure: ", err.Error())
+		assert.Fail(t, "failure getting azure proxy")
+		printCloudError(err)
 	} else {
-		awsProxy, er := getProxy(storage.CloudStorageTypeAWSS3)
+		awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+			AccountURL: os.Getenv("S3AccountURL"),
+		})
 		if er != nil {
-			assert.Fail(t, "failure")
-			println("unable to connect to AWS: ", err.Error())
+			assert.Fail(t, "failure getting aws proxy")
+			printCloudError(err)
 		} else {
 			// copy file from s3 to azure
 			ctx := context.Background()
 			file, e := awsProxy.GetFile(ctx, s3container, "test-stream-jar")
 			if e != nil {
-				println("unable to get file: ", e.Error())
-				assert.Fail(t, "failed")
+				printCloudError(err)
+				assert.Fail(t, "failed to get file from aws")
 			} else {
 				length, _ := strconv.ParseInt(file.Metadata["content_length"], 2, 64)
 				println("length is " + file.Metadata["content_length"])
@@ -350,30 +348,12 @@ func TestCopyS3FileToAzureStream(t *testing.T) {
 				err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws.jar",
 					file.Metadata, fileStream, length, 10)
 				if err != nil {
-					println("unable to copy stream: ", err.Error())
-					assert.Fail(t, "failed")
+					printCloudError(err)
+					assert.Fail(t, "failed to upload from input stream")
 				} else {
 					assert.True(t, true, "succeeded")
 				}
 			}
 		}
-	}
-}
-
-func TestGetAzureClientFromSAS(t *testing.T) {
-	initTests()
-	azureAccountURL := os.Getenv("AzureAccountURL")
-	azureAccountKey := os.Getenv("AzureAccountKey")
-	_, err := storage.CloudStorageProxyFactory(storage.CloudStorageTypeAzure, storage.CloudStorageConnectionOptions{
-		UseSASToken: true,
-		AccountURL:  azureAccountURL,
-		AccountKey:  azureAccountKey,
-	})
-	if err != nil {
-		assert.Fail(t, "failed")
-		printCloudError(err)
-	} else {
-		assert.True(t, true, "succeeded")
-		println("Successfully got sas client")
 	}
 }

@@ -16,17 +16,32 @@ type AWSCloudStorageProxy struct {
 	s3ServicesClient *s3.Client
 }
 
-func newAWSCloudStorageProxyFromIdentity(accountURL string, accessID string, accessKey string) (*AWSCloudStorageProxy, error) {
+func (handler ProxyAuthHandlerAWSDefaultIdentity) createProxy() (CloudStorageProxy, error) {
+	awsConfig, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return nil, wrapError("unable to create AWS service client", err)
+	} else {
+		client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
+			if handler.AccountURL != "" {
+				o.UsePathStyle = true
+				o.BaseEndpoint = aws.String(handler.AccountURL)
+			}
+		})
+		return &AWSCloudStorageProxy{s3ServicesClient: client}, nil
+	}
+}
+
+func (handler ProxyAuthHandlerAWSConfiguredIdentity) createProxy() (CloudStorageProxy, error) {
 	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessID, accessKey, "")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(handler.AccessID, handler.AccessKey, "")),
 	)
 	if err != nil {
 		return nil, wrapError("unable to create AWS service client", err)
 	} else {
 		client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
-			if accountURL != "" {
+			if handler.AccountURL != "" {
 				o.UsePathStyle = true
-				o.BaseEndpoint = aws.String(accountURL)
+				o.BaseEndpoint = aws.String(handler.AccountURL)
 			}
 		})
 		return &AWSCloudStorageProxy{s3ServicesClient: client}, nil

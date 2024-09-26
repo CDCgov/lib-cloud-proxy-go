@@ -2,9 +2,12 @@ package storage
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"golang.org/x/net/context"
@@ -19,27 +22,38 @@ type AzureCloudStorageProxy struct {
 	blobServiceClient *azblob.Client
 }
 
-func (handler ProxyAuthHandlerAzureIdentity) createProxy() (CloudStorageProxy, error) {
+func (handler ProxyAuthHandlerAzureDefaultIdentity) createProxy() (CloudStorageProxy, error) {
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
-		client, er := azblob.NewClient(handler.AccountURL, credential, nil)
-		if er == nil {
-			return &AzureCloudStorageProxy{blobServiceClient: client}, nil
-		} else {
-			return nil, wrapError("unable to create Azure blob service client", er)
-		}
+		return createProxyFromCredential(handler.AccountURL, credential)
 	}
 	return nil, err
+}
+
+func (handler ProxyAuthHandlerAzureClientSecretIdentity) createProxy() (CloudStorageProxy, error) {
+	credential, err := azidentity.NewClientSecretCredential(handler.TenantID, handler.ClientID,
+		handler.ClientSecret, nil)
+	if err == nil {
+		return createProxyFromCredential(handler.AccountURL, credential)
+	}
+	return nil, err
+}
+
+func createProxyFromCredential(accountURL string, credential azcore.TokenCredential) (CloudStorageProxy, error) {
+	client, err := azblob.NewClient(accountURL, credential, nil)
+	if err == nil {
+		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
+	}
+	return nil, wrapError("unable to create Azure Storage service client", err)
+
 }
 
 func (handler ProxyAuthHandlerAzureConnectionString) createProxy() (CloudStorageProxy, error) {
 	client, err := azblob.NewClientFromConnectionString(handler.ConnectionString, nil)
 	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
-	} else {
-		return nil, wrapError("unable to create Azure blob service client from "+
-			"connection string", err)
 	}
+	return nil, wrapError("unable to create Azure Storage service client", err)
 }
 
 func (handler ProxyAuthHandlerAzureSASToken) createProxy() (CloudStorageProxy, error) {
@@ -72,12 +86,10 @@ func (handler ProxyAuthHandlerAzureSASToken) createProxy() (CloudStorageProxy, e
 	)
 
 	client, err := azblob.NewClientWithNoCredential(sasURL, nil)
-	if err != nil {
-		return nil, wrapError("unable to create Azure blob service client from "+
-			"url with SAS token", err)
-	} else {
+	if err == nil {
 		return &AzureCloudStorageProxy{blobServiceClient: client}, nil
 	}
+	return nil, wrapError("unable to create Azure Storage service client", err)
 }
 
 func (az *AzureCloudStorageProxy) listFilesOrFolders(ctx context.Context, containerName string,
@@ -174,6 +186,30 @@ func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Contex
 	}
 }
 
+func (az *AzureCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error) {
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+	if fileSize <= 0 {
+		fileSize = 1
+	}
+	buffer := make([]byte, fileSize)
+	blockBlobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(fileName)
+	numBytes, err := blockBlobClient.DownloadBuffer(ctx, buffer, &blob.DownloadBufferOptions{
+		BlockSize:   size_5MiB,
+		Concurrency: uint16(concurrency),
+	})
+	if err != nil {
+		return nil, wrapError("unable to download to buffer", err)
+	}
+	if numBytes < fileSize {
+		return nil, &CloudStorageError{
+			message: fmt.Sprintf("bytes downloaded (%d) did not match file size (%d)", numBytes, fileSize),
+		}
+	}
+	return buffer, nil
+}
+
 func (az *AzureCloudStorageProxy) GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error) {
 	props := make(map[string]string)
 	blobClient := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlobClient(fileName)
@@ -208,7 +244,7 @@ func writeMetadata(metadata map[string]string) map[string]*string {
 	return props
 }
 
-func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containerName string, fileName string,
+func (az *AzureCloudStorageProxy) UploadFileFromText(ctx context.Context, containerName string, fileName string,
 	metadata map[string]string, content string) error {
 	contentReader := strings.NewReader(content)
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, contentReader, &azblob.UploadStreamOptions{
@@ -221,7 +257,7 @@ func (az *AzureCloudStorageProxy) SaveFileFromText(ctx context.Context, containe
 	}
 }
 
-func (az *AzureCloudStorageProxy) SaveFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+func (az *AzureCloudStorageProxy) UploadFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 	inputStream io.Reader, fileSizeBytes int64, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = 5
@@ -247,15 +283,7 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 	return nil
 }
 
-//func (az *AzureCloudStorageProxy) CopyFromAWS(ctx context.Context, fromURL string, toURL string) error {
-//	cooked := cmd.CookedCopyCmdArgs{
-//		Source: common.ResourceString{
-//			Value: fromURL,
-//		},
-//		Destination: common.ResourceString{
-//			Value: toURL,
-//		},
-//		FromTo: common.EFromTo.S3Blob(),
-//	}
-//	cooked.process()
-//}
+func (az *AzureCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string, destinationProxy *AWSCloudStorageProxy) error {
+	return nil
+}

@@ -194,7 +194,7 @@ func TestUploadText(t *testing.T) {
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
 			}
-			e := az.SaveFileFromText(context.Background(), container,
+			e := az.UploadFileFromText(context.Background(), container,
 				"testFolder/test-fldr-upload.HL7",
 				metadata, string(content))
 			if e != nil {
@@ -233,7 +233,7 @@ func TestUploadStream(t *testing.T) {
 			"data_stream_id": "DAART",
 		}
 		reader := bufio.NewReader(file)
-		e := az.SaveFileFromInputStream(context.Background(), container, "test-stream-test",
+		e := az.UploadFileFromInputStream(context.Background(), container, "test-stream-test",
 			metadata, reader, fileSize, 10)
 		if e != nil {
 			printCloudError(e)
@@ -305,7 +305,7 @@ func TestCopyS3StreamToAzureStream(t *testing.T) {
 					assert.Fail(t, "failed")
 				} else {
 					defer fileStream.Close()
-					err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws2.jar",
+					err := azureProxy.UploadFileFromInputStream(ctx, azureContainer, "jar-from-aws2.jar",
 						fileData, fileStream, length, 2)
 					if err != nil {
 						printCloudError(err)
@@ -345,7 +345,7 @@ func TestCopyS3FileToAzureStream(t *testing.T) {
 				length, _ := strconv.ParseInt(file.Metadata["content_length"], 2, 64)
 				println("length is " + file.Metadata["content_length"])
 				fileStream := strings.NewReader(file.Content)
-				err := azureProxy.SaveFileFromInputStream(ctx, azureContainer, "jar-from-aws.jar",
+				err := azureProxy.UploadFileFromInputStream(ctx, azureContainer, "jar-from-aws.jar",
 					file.Metadata, fileStream, length, 10)
 				if err != nil {
 					printCloudError(err)

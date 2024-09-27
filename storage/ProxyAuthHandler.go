@@ -4,8 +4,15 @@ type ProxyAuthHandler interface {
 	createProxy() (CloudStorageProxy, error)
 }
 
-type ProxyAuthHandlerAzureIdentity struct {
+type ProxyAuthHandlerAzureDefaultIdentity struct {
 	AccountURL string
+}
+
+type ProxyAuthHandlerAzureClientSecretIdentity struct {
+	AccountURL   string
+	TenantID     string
+	ClientID     string
+	ClientSecret string
 }
 
 type ProxyAuthHandlerAzureConnectionString struct {

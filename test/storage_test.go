@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io"
 	"lib-cloud-proxy-go/storage"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -356,4 +357,67 @@ func TestCopyS3FileToAzureStream(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestCopyS3ToS3WithDifferentCredentials(t *testing.T) {
+	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get proxy")
+		return
+	}
+	awsLocal, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSConfiguredIdentity{
+		AccountURL: "http://localhost:4566",
+		AccessID:   "test",
+		AccessKey:  "test",
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get local proxy")
+		return
+	}
+	err = awsProxy.CopyFileToS3Bucket(context.Background(), s3container, "test-stream-jar",
+		"my-first-bucket", "test-copy", &awsLocal, 10)
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to copy file")
+		return
+	}
+	assert.Truef(t, true, "succeeded")
+}
+
+func TestGetLargeFileAsByteArray(t *testing.T) {
+	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get proxy")
+		return
+	}
+	metadata, e := awsProxy.GetMetadata(context.Background(), s3container, "test-stream-jar")
+	if e != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get metadata")
+		return
+	}
+	fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
+	println(metadata["content_length"])
+	concurrency := 0
+	if fileSize > (5 * 1024 * 1024) {
+		concurrency = int(math.Round(float64(fileSize / (5 * 1024 * 1024))))
+	}
+	fmt.Printf("concurrency is %d \n", concurrency)
+	fileBytes, er := awsProxy.GetLargeFileAsByteArray(context.Background(), s3container,
+		"test-stream-jar", fileSize, concurrency)
+	if er != nil {
+		printCloudError(er)
+		assert.Fail(t, "failed to get file contents")
+		return
+	}
+	println(len(fileBytes))
+	assert.Truef(t, true, "succeeded")
+
 }

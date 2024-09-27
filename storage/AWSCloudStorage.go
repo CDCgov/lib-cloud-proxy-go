@@ -159,7 +159,8 @@ func (aw *AWSCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context,
 	return nil, wrapError("unable to get stream reader for file "+fileName, err)
 }
 
-func (aw *AWSCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error) {
+func (aw *AWSCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string,
+	fileSize int64, concurrency int) ([]byte, error) {
 	if concurrency <= 0 {
 		concurrency = 5
 	}
@@ -250,7 +251,10 @@ func (aw *AWSCloudStorageProxy) DeleteFile(ctx context.Context, containerName st
 }
 
 func (aw *AWSCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string, destinationProxy *AWSCloudStorageProxy) error {
+	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
+	if concurrency <= 0 {
+		concurrency = 15
+	}
 	if destinationProxy == nil {
 		// assume we can use the same authentication as current proxy to write to the destination.
 		source := fmt.Sprintf("%s/%s", sourceContainer, sourceFile)
@@ -277,14 +281,16 @@ func (aw *AWSCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceCo
 				return wrapError("unable to read source file as stream", err)
 			}
 		} else {
-			content, err := aw.GetLargeFileAsByteArray(ctx, sourceContainer, sourceFile, fileSize, 5)
+			content, err := aw.GetLargeFileAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
 			if err != nil {
 				return wrapError("unable to get large file as byte array", err)
 			}
 			inputStream = bytes.NewReader(content)
 		}
-		if err := destinationProxy.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
-			fileSize, 5); err != nil {
+		p := *destinationProxy
+
+		if err := p.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
+			fileSize, concurrency); err != nil {
 			return wrapError("unable to save to S3 bucket", err)
 		}
 	}

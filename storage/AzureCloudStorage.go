@@ -284,6 +284,6 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 }
 
 func (az *AzureCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string, destinationProxy *AWSCloudStorageProxy) error {
+	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
 	return nil
 }

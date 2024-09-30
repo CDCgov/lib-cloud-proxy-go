@@ -151,7 +151,7 @@ func (az *AzureCloudStorageProxy) GetFile(ctx context.Context, containerName str
 	return file, err
 }
 
-func (az *AzureCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+func (az *AzureCloudStorageProxy) GetFileContentAsString(ctx context.Context, containerName string, fileName string) (string, error) {
 	content, _, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
 	return content, err
 }
@@ -244,7 +244,7 @@ func writeMetadata(metadata map[string]string) map[string]*string {
 	return props
 }
 
-func (az *AzureCloudStorageProxy) UploadFileFromText(ctx context.Context, containerName string, fileName string,
+func (az *AzureCloudStorageProxy) UploadFileFromString(ctx context.Context, containerName string, fileName string,
 	metadata map[string]string, content string) error {
 	contentReader := strings.NewReader(content)
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, contentReader, &azblob.UploadStreamOptions{

@@ -143,7 +143,7 @@ func (aw *AWSCloudStorageProxy) GetFile(ctx context.Context, containerName strin
 	return cloudFile, err
 }
 
-func (aw *AWSCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+func (aw *AWSCloudStorageProxy) GetFileContentAsString(ctx context.Context, containerName string, fileName string) (string, error) {
 	content, _, err := aw.getFileContentAndMetadata(ctx, containerName, fileName, false)
 	return content, err
 }
@@ -164,8 +164,13 @@ func (aw *AWSCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, con
 	if concurrency <= 0 {
 		concurrency = 5
 	}
+	var partSize int64 = size_5MiB
+	if fileSize > size_5MiB*max_PARTS {
+		// we need to increase the Part size
+		partSize = fileSize / max_PARTS
+	}
 	downloader := manager.NewDownloader(aw.s3ServicesClient, func(d *manager.Downloader) {
-		d.PartSize = size_5MiB
+		d.PartSize = partSize
 		d.Concurrency = concurrency
 	})
 	buffer := manager.NewWriteAtBuffer([]byte{})
@@ -194,7 +199,7 @@ func (aw *AWSCloudStorageProxy) GetMetadata(ctx context.Context, containerName s
 	return nil, wrapError("unable to get metadata for object "+fileName, err)
 }
 
-func (aw *AWSCloudStorageProxy) UploadFileFromText(ctx context.Context, containerName string, fileName string,
+func (aw *AWSCloudStorageProxy) UploadFileFromString(ctx context.Context, containerName string, fileName string,
 	metadata map[string]string, content string) error {
 	contentReader := strings.NewReader(content)
 	_, err := aw.s3ServicesClient.PutObject(ctx, &s3.PutObjectInput{

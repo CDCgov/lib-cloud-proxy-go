@@ -119,7 +119,7 @@ func TestGetFileContent(t *testing.T) {
 	})
 	container := azureContainer
 	if err == nil {
-		content, err := az.GetFileContent(context.Background(), container, "test-stream-upload")
+		content, err := az.GetFileContentAsString(context.Background(), container, "test-stream-upload")
 		if err == nil {
 			fmt.Println("Success")
 			fmt.Println(content)
@@ -195,7 +195,7 @@ func TestUploadText(t *testing.T) {
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
 			}
-			e := az.UploadFileFromText(context.Background(), container,
+			e := az.UploadFileFromString(context.Background(), container,
 				"testFolder/test-fldr-upload.HL7",
 				metadata, string(content))
 			if e != nil {

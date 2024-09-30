@@ -26,10 +26,10 @@ type CloudStorageProxy interface {
 	UploadFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
-	CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
+	CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error
-	//CopyFileToAzureContainer(ctx context.Context, sourceContainer string, sourceFile string,
-	//	destContainer string, destFile string, destinationProxy *AzureCloudStorageProxy) error
+	CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
+		destContainer string, destFile string) error
 }
 
 type blobListType string

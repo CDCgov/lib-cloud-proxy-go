@@ -250,49 +250,50 @@ func (aw *AWSCloudStorageProxy) DeleteFile(ctx context.Context, containerName st
 	return nil
 }
 
-func (aw *AWSCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
+func (aw *AWSCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = 15
 	}
-	if destinationProxy == nil {
-		// assume we can use the same authentication as current proxy to write to the destination.
-		source := fmt.Sprintf("%s/%s", sourceContainer, sourceFile)
-		if _, err := aw.s3ServicesClient.CopyObject(ctx, &s3.CopyObjectInput{
-			CopySource: aws.String(source),
-			Bucket:     aws.String(destContainer),
-			Key:        aws.String(destFile),
-		}); err != nil {
-			return wrapError("unable to copy object to S3 bucket", err)
+	metadata, err := aw.GetMetadata(ctx, sourceContainer, sourceFile)
+	if err != nil {
+		return wrapError("unable to read source file metadata", err)
+	}
+	fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
+	if fileSize == 0 {
+		fileSize = 1
+	}
+	var inputStream io.Reader
+	if fileSize < size_LARGEOBJECT {
+		inputStream, err = aw.GetFileContentAsInputStream(ctx, sourceContainer, sourceFile)
+		if err != nil {
+			return wrapError("unable to read source file as stream", err)
 		}
 	} else {
-		metadata, err := aw.GetMetadata(ctx, sourceContainer, sourceFile)
+		content, err := aw.GetLargeFileAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
 		if err != nil {
-			return wrapError("unable to read source file metadata", err)
+			return wrapError("unable to get large file as byte array", err)
 		}
-		fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
-		if fileSize == 0 {
-			fileSize = 1
-		}
-		var inputStream io.Reader
-		if fileSize < size_LARGEOBJECT {
-			inputStream, err = aw.GetFileContentAsInputStream(ctx, sourceContainer, sourceFile)
-			if err != nil {
-				return wrapError("unable to read source file as stream", err)
-			}
-		} else {
-			content, err := aw.GetLargeFileAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
-			if err != nil {
-				return wrapError("unable to get large file as byte array", err)
-			}
-			inputStream = bytes.NewReader(content)
-		}
-		p := *destinationProxy
+		inputStream = bytes.NewReader(content)
+	}
+	p := *destinationProxy
 
-		if err := p.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
-			fileSize, concurrency); err != nil {
-			return wrapError("unable to save to S3 bucket", err)
-		}
+	if err := p.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
+		fileSize, concurrency); err != nil {
+		return wrapError("unable to save to S3 bucket", err)
+	}
+	return nil
+}
+
+func (aw *AWSCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string) error {
+	source := fmt.Sprintf("%s/%s", sourceContainer, sourceFile)
+	if _, err := aw.s3ServicesClient.CopyObject(ctx, &s3.CopyObjectInput{
+		CopySource: aws.String(source),
+		Bucket:     aws.String(destContainer),
+		Key:        aws.String(destFile),
+	}); err != nil {
+		return wrapError("unable to copy object to S3 bucket", err)
 	}
 	return nil
 }

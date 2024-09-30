@@ -378,7 +378,7 @@ func TestCopyS3ToS3WithDifferentCredentials(t *testing.T) {
 		assert.Fail(t, "failed to get local proxy")
 		return
 	}
-	err = awsProxy.CopyFileToS3Bucket(context.Background(), s3container, "test-stream-jar",
+	err = awsProxy.CopyFileToRemoteStorageContainer(context.Background(), s3container, "test-stream-jar",
 		"my-first-bucket", "test-copy", &awsLocal, 10)
 	if err != nil {
 		printCloudError(err)

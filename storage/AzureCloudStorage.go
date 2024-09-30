@@ -283,7 +283,11 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 	return nil
 }
 
-func (az *AzureCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
+func (az *AzureCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
+	return nil
+}
+func (az *AzureCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string) error {
 	return nil
 }

@@ -289,6 +289,19 @@ func (az *AzureCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.C
 
 	return nil
 }
+func (az *AzureCloudStorageProxy) CopyFileFromURL(ctx context.Context, sourceURL string, destContainer string,
+	destFile string, metadata map[string]string) error {
+	destBlob := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
+	_, e := destBlob.UploadBlobFromURL(ctx, sourceURL,
+		&blockblob.UploadBlobFromURLOptions{
+			Metadata: writeMetadata(metadata),
+		})
+
+	if e != nil {
+		return wrapError("unable to copy blob", e)
+	}
+	return nil
+}
 func (az *AzureCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string) error {
 	sourceBlob := az.blobServiceClient.ServiceClient().NewContainerClient(sourceContainer).NewBlockBlobClient(sourceFile)
@@ -317,4 +330,7 @@ func (az *AzureCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Co
 		return wrapError("unable to copy blob", e)
 	}
 	return nil
+}
+func (az *AzureCloudStorageProxy) GetBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
+	return "", nil
 }

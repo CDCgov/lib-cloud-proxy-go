@@ -12,6 +12,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type AWSCloudStorageProxy struct {
@@ -285,10 +286,9 @@ func (aw *AWSCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Con
 		inputStream = bytes.NewReader(content)
 	}
 	p := *destinationProxy
-
 	if err := p.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
 		fileSize, concurrency); err != nil {
-		return wrapError("unable to save to S3 bucket", err)
+		return err
 	}
 	return nil
 }
@@ -303,5 +303,26 @@ func (aw *AWSCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Cont
 	}); err != nil {
 		return wrapError("unable to copy object to S3 bucket", err)
 	}
+	return nil
+}
+
+func (aw *AWSCloudStorageProxy) GetBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
+	presignClient := s3.NewPresignClient(aw.s3ServicesClient)
+	request, err := presignClient.PresignGetObject(ctx,
+		&s3.GetObjectInput{
+			Bucket: aws.String(containerName),
+			Key:    aws.String(fileName),
+		},
+		func(options *s3.PresignOptions) {
+			options.Expires = time.Hour
+		},
+	)
+	if err != nil {
+		return "", wrapError("could not obtain presigned url", err)
+	}
+	return request.URL, nil
+}
+func (aw *AWSCloudStorageProxy) CopyFileFromURL(ctx context.Context, sourceURL string, destContainer string,
+	destFile string, metadata map[string]string) error {
 	return nil
 }

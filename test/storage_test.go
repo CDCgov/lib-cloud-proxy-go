@@ -431,9 +431,10 @@ func TestCopyS3ToAzure(t *testing.T) {
 		assert.Fail(t, "failed to get proxy")
 		return
 	}
-	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureDefaultIdentity{
-		AccountURL: os.Getenv("AzureAccountURL"),
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
 	})
+
 	if err != nil {
 		printCloudError(err)
 		assert.Fail(t, "failed to get azure proxy")
@@ -467,4 +468,20 @@ func TestCopyAzureToAzure(t *testing.T) {
 		return
 	}
 
+}
+
+func TestPresignedURL(t *testing.T) {
+	az, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	ctx := context.Background()
+	sourceURL, _ := az.GetBlobSignedURL(ctx, s3container, "test-stream-jar")
+	metadata, _ := az.GetMetadata(ctx, s3container, "test-stream-jar")
+	ax, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
+	err := ax.CopyFileFromURL(context.Background(), sourceURL, azureContainer, "testfromaws.txt", metadata)
+	if err != nil {
+		printCloudError(err)
+	}
 }

@@ -34,6 +34,9 @@ type CloudStorageProxy interface {
 	// CopyFileToLocalStorageContainer copies a blob from one container to another within the same storage account.
 	CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string) error
+	GetBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
+	CopyFileFromURL(ctx context.Context, sourceURL string, destContainer string,
+		destFile string, metadata map[string]string) error
 }
 
 type blobListType string

@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"golang.org/x/net/context"
@@ -285,9 +286,35 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 
 func (az *AzureCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
+
 	return nil
 }
 func (az *AzureCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string) error {
+	sourceBlob := az.blobServiceClient.ServiceClient().NewContainerClient(sourceContainer).NewBlockBlobClient(sourceFile)
+	resp, err := sourceBlob.GetProperties(ctx, nil)
+	var props map[string]string
+	if err == nil {
+		props = readMetadata(resp.Metadata)
+	}
+
+	destBlob := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
+	sourceURL, er := sourceBlob.GetSASURL(sas.BlobPermissions{
+		Read:   true,
+		Add:    true,
+		Create: true,
+		Write:  true,
+	}, time.Now().Add(2*time.Hour), nil)
+	if er != nil {
+		return wrapError("unable to obtain SAS url for source blob", er)
+	}
+	_, e := destBlob.UploadBlobFromURL(ctx, sourceURL,
+		&blockblob.UploadBlobFromURLOptions{
+			Metadata: writeMetadata(props),
+		})
+
+	if e != nil {
+		return wrapError("unable to copy blob", e)
+	}
 	return nil
 }

@@ -23,7 +23,7 @@ func (handler ProxyAuthHandlerAWSDefaultIdentity) createProxy() (CloudStoragePro
 	if err != nil {
 		return nil, wrapError("unable to create S3 service client", err)
 	}
-	return createProxyFromConfig(handler.AccountURL, &awsConfig)
+	return createProxyFromConfig(handler.AccountURL, "", &awsConfig)
 
 }
 
@@ -34,14 +34,17 @@ func (handler ProxyAuthHandlerAWSConfiguredIdentity) createProxy() (CloudStorage
 	if err != nil {
 		return nil, wrapError("unable to create S3 service client", err)
 	}
-	return createProxyFromConfig(handler.AccountURL, &awsConfig)
+	return createProxyFromConfig(handler.AccountURL, handler.Region, &awsConfig)
 }
 
-func createProxyFromConfig(accountURL string, awsConfig *aws.Config) (CloudStorageProxy, error) {
+func createProxyFromConfig(accountURL string, accountRegion string, awsConfig *aws.Config) (CloudStorageProxy, error) {
 	client := s3.NewFromConfig(*awsConfig, func(o *s3.Options) {
 		if accountURL != "" {
 			o.UsePathStyle = true
 			o.BaseEndpoint = aws.String(accountURL)
+		}
+		if accountRegion != "" {
+			o.Region = accountRegion
 		}
 	})
 	return &AWSCloudStorageProxy{s3ServicesClient: client}, nil

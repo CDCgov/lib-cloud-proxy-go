@@ -31,9 +31,7 @@ type CloudStorageProxy interface {
 	// (b) uses different credentials. Requires an initialized proxy to the destination.
 	CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error
-	// CopyFileToLocalStorageContainer copies a blob from one container to another.
-	// Used for copying to a destination container that is in the same cloud environment and
-	// uses the same credentials as the source container.
+	// CopyFileToLocalStorageContainer copies a blob from one container to another within the same storage account.
 	CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string) error
 }

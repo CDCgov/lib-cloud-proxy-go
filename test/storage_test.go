@@ -405,7 +405,7 @@ func TestGetLargeFileAsByteArray(t *testing.T) {
 	}
 	fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
 	println(metadata["content_length"])
-	concurrency := 0
+	concurrency := 5
 	if fileSize > (5 * 1024 * 1024) {
 		concurrency = int(math.Round(float64(fileSize / (5 * 1024 * 1024))))
 	}
@@ -419,5 +419,52 @@ func TestGetLargeFileAsByteArray(t *testing.T) {
 	}
 	println(len(fileBytes))
 	assert.Truef(t, true, "succeeded")
+
+}
+
+func TestCopyS3ToAzure(t *testing.T) {
+	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get proxy")
+		return
+	}
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureDefaultIdentity{
+		AccountURL: os.Getenv("AzureAccountURL"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to get azure proxy")
+		return
+	}
+	err = awsProxy.CopyFileToRemoteStorageContainer(context.Background(), s3container, "test-stream-jar",
+		"proxy-test", "test-copy", &azureProxy, 10)
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed to copy file")
+		return
+	}
+	assert.Truef(t, true, "succeeded")
+}
+
+func TestCopyAzureToAzure(t *testing.T) {
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failure getting azure proxy")
+		return
+	}
+	err = azureProxy.CopyFileToLocalStorageContainer(context.Background(), "routeingress",
+		"big/2g.txt",
+		"proxy-test", "2gtest.txt")
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failed")
+		return
+	}
 
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"io"
+	"strconv"
 	"time"
 )
 
@@ -19,24 +20,19 @@ type CloudStorageProxy interface {
 	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
 	GetFileContentAsString(ctx context.Context, containerName string, fileName string) (string, error)
 	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error)
-	GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error)
+	GetLargeFileContentAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
 	UploadFileFromString(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	UploadFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
-	// CopyFileToRemoteStorageContainer copies a blob from one container to another.
-	// Used for copying to a destination container that is (a) in a different cloud environment and/or
-	// (b) uses different credentials. Requires an initialized proxy to the destination.
-	CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
-		destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error
-	// CopyFileToLocalStorageContainer copies a blob from one container to another within the same storage account.
-	CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
-		destContainer string, destFile string) error
-	GetBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
-	CopyFileFromURL(ctx context.Context, sourceURL string, destContainer string,
+	GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
+	GetDestBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
+	CopyFileFromSignedURL(ctx context.Context, sourceBlobSignedURL string, destContainer string,
 		destFile string, metadata map[string]string) error
+	CopyFileToSignedURL(ctx context.Context, sourceContainer string, sourceFile string,
+		destSignedURL string, metadata map[string]string) error
 }
 
 type blobListType string
@@ -65,4 +61,9 @@ func wrapError(msg string, err error) *CloudStorageError {
 
 func CloudStorageProxyFactory(handler ProxyAuthHandler) (CloudStorageProxy, error) {
 	return handler.createProxy()
+}
+
+func getStringAsInt64(number string) int64 {
+	length, _ := strconv.ParseInt(number, 10, 64)
+	return length
 }

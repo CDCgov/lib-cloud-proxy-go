@@ -163,7 +163,7 @@ func (aw *AWSCloudStorageProxy) GetFileContentAsInputStream(ctx context.Context,
 	return nil, wrapError("unable to get stream reader for file "+fileName, err)
 }
 
-func (aw *AWSCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string,
+func (aw *AWSCloudStorageProxy) GetLargeFileContentAsByteArray(ctx context.Context, containerName string, fileName string,
 	fileSize int64, concurrency int) ([]byte, error) {
 	if concurrency <= 0 {
 		concurrency = 5
@@ -279,7 +279,7 @@ func (aw *AWSCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Con
 			return wrapError("unable to read source file as stream", err)
 		}
 	} else {
-		content, err := aw.GetLargeFileAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
+		content, err := aw.GetLargeFileContentAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
 		if err != nil {
 			return wrapError("unable to get large file as byte array", err)
 		}
@@ -306,7 +306,7 @@ func (aw *AWSCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Cont
 	return nil
 }
 
-func (aw *AWSCloudStorageProxy) GetBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
+func (aw *AWSCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
 	presignClient := s3.NewPresignClient(aw.s3ServicesClient)
 	request, err := presignClient.PresignGetObject(ctx,
 		&s3.GetObjectInput{
@@ -322,7 +322,37 @@ func (aw *AWSCloudStorageProxy) GetBlobSignedURL(ctx context.Context, containerN
 	}
 	return request.URL, nil
 }
-func (aw *AWSCloudStorageProxy) CopyFileFromURL(ctx context.Context, sourceURL string, destContainer string,
+func (aw *AWSCloudStorageProxy) GetDestBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
+	presignClient := s3.NewPresignClient(aw.s3ServicesClient)
+	request, err := presignClient.PresignPutObject(ctx,
+		&s3.PutObjectInput{
+			Bucket: aws.String(containerName),
+			Key:    aws.String(fileName),
+		},
+		func(options *s3.PresignOptions) {
+			options.Expires = time.Hour
+		},
+	)
+	if err != nil {
+		return "", wrapError("could not obtain presigned url", err)
+	}
+	return request.URL, nil
+}
+
+func (aw *AWSCloudStorageProxy) CopyFileFromSignedURL(ctx context.Context, sourceSignedURL string, destContainer string,
 	destFile string, metadata map[string]string) error {
+
+	_, err := aw.s3ServicesClient.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(destContainer),
+		CopySource: aws.String(sourceSignedURL),
+		Key:        aws.String(destFile),
+	})
+	if err != nil {
+		return wrapError("unable to copy from url", err)
+	}
+	return nil
+}
+func (aw *AWSCloudStorageProxy) CopyFileToSignedURL(ctx context.Context, sourceContainer string, sourceFile string,
+	destSignedURL string, metadata map[string]string) error {
 	return nil
 }

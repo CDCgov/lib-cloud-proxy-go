@@ -278,6 +278,7 @@ func (aw *AWSCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, cont
 
 func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error {
+	// azure to s3 or different s3 account to s3
 	if concurrency <= 0 {
 		concurrency = 15
 	}
@@ -286,7 +287,7 @@ func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, s
 	if err != nil {
 		return wrapError("unable to read source file metadata", err)
 	}
-	fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
+	fileSize := getStringAsInt64(metadata["content_length"])
 	if fileSize == 0 {
 		fileSize = 1
 	}

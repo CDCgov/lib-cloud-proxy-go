@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -11,11 +12,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -321,15 +324,74 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 		return err
 	}
 	length := getStringAsInt64(metadata["content_length"])
+	url, er := s.GetSourceBlobSignedURL(ctx, sourceContainer, sourceFile)
 
-	if length < size_5MiB*1000 {
-		url, er := s.GetSourceBlobSignedURL(ctx, sourceContainer, sourceFile)
+	if length < size_5MiB*10 {
 		if er != nil {
 			return er
 		}
 		return az.copyFileFromSignedURL(ctx, url, destContainer, destFile, metadata)
 	} else {
-		// do some chunk thing
+		numChunks := length / size_5MiB
+		if length%size_5MiB != 0 {
+			numChunks++
+		}
+		blockBlobClient := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
+		blockBase := uuid.New()
+		blockIDs := make([]string, numChunks)
+		var chunkNum int64
+		var start int64 = 0
+		var count int64 = size_5MiB
+		chunkIdMap := make(map[string]azblob.HTTPRange)
+		for chunkNum = 0; chunkNum < numChunks; chunkNum++ {
+			end := start + count
+			if end > length {
+				count = 0
+			}
+			chunkId := base64.StdEncoding.EncodeToString([]byte(blockBase.String() + fmt.Sprintf("%04d", chunkNum)))
+			blockIDs[chunkNum] = chunkId
+			chunkIdMap[chunkId] = azblob.HTTPRange{
+				Offset: start,
+				Count:  count,
+			}
+			start = end
+		}
+		wg := sync.WaitGroup{}
+		errCh := make(chan error, 1)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		for id := range chunkIdMap {
+			wg.Add(1)
+			go func(chunkId string) {
+				_, err := blockBlobClient.StageBlockFromURL(ctx, chunkId, url, &blockblob.StageBlockFromURLOptions{
+					Range: chunkIdMap[chunkId],
+				})
+
+				if err != nil {
+					select {
+					case errCh <- err:
+						// error was set
+					default:
+						// some other error is already set
+					}
+					cancel()
+				}
+				wg.Done()
+			}(id)
+
+		}
+		wg.Wait()
+		select {
+		case err = <-errCh:
+			// there was an error during staging
+			return wrapError("error staging blocks", err)
+		default:
+			// no error was encountered
+		}
+		_, err = blockBlobClient.CommitBlockList(ctx, blockIDs, nil)
+		if err != nil {
+			return wrapError("unable to commit blocks", err)
+		}
 	}
 	return nil
 }

@@ -325,11 +325,10 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 	}
 	length := getStringAsInt64(metadata["content_length"])
 	url, er := s.GetSourceBlobSignedURL(ctx, sourceContainer, sourceFile)
-
-	if length < size_5MiB*10 {
-		if er != nil {
-			return er
-		}
+	if er != nil {
+		return er
+	}
+	if length < size_LARGEOBJECT {
 		return az.copyFileFromSignedURL(ctx, url, destContainer, destFile, metadata)
 	} else {
 		numChunks := length / size_5MiB
@@ -356,6 +355,7 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 			}
 			start = end
 		}
+		// TODO: throttle concurrency?
 		wg := sync.WaitGroup{}
 		errCh := make(chan error, 1)
 		ctx, cancel := context.WithCancel(ctx)
@@ -388,7 +388,8 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 		default:
 			// no error was encountered
 		}
-		_, err = blockBlobClient.CommitBlockList(ctx, blockIDs, nil)
+		_, err = blockBlobClient.CommitBlockList(ctx, blockIDs,
+			&blockblob.CommitBlockListOptions{Metadata: writeMetadata(metadata)})
 		if err != nil {
 			return wrapError("unable to commit blocks", err)
 		}
@@ -398,12 +399,6 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 
 func (az *AzureCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string) error {
-	source := az.blobServiceClient.ServiceClient().NewContainerClient(sourceContainer).NewBlobClient(sourceFile)
-	metadata, _ := az.GetMetadata(ctx, sourceContainer, sourceFile)
-	dest := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlobClient(destFile)
-	_, err := dest.CopyFromURL(ctx, source.URL(), &blob.CopyFromURLOptions{Metadata: writeMetadata(metadata)})
-	if err != nil {
-		return wrapError("unable to copy local file", err)
-	}
-	return nil
+	var s CloudStorageProxy = az
+	return az.CopyFileFromRemoteStorage(ctx, sourceContainer, sourceFile, destContainer, destFile, &s, 10)
 }

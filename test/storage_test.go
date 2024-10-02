@@ -276,119 +276,6 @@ func TestDeleteFile(t *testing.T) {
 	}
 }
 
-func TestCopyS3StreamToAzureStream(t *testing.T) {
-	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-		ConnectionString: os.Getenv("ConnectionString"),
-	})
-	if err != nil {
-		assert.Fail(t, "failure getting azure proxy")
-		printCloudError(err)
-	} else {
-		awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-			AccountURL: os.Getenv("S3AccountURL"),
-		})
-		if er != nil {
-			assert.Fail(t, "failure getting aws proxy")
-			printCloudError(er)
-		} else {
-			// copy file from s3 to azure
-			ctx := context.Background()
-			fileData, err := awsProxy.GetMetadata(ctx, s3container, "test-stream-jar")
-			if err != nil {
-				printCloudError(err)
-				assert.Fail(t, "failed")
-			} else {
-				length, _ := strconv.ParseInt(fileData["content_length"], 10, 64)
-				println("length is " + fileData["content_length"])
-				fileStream, e := awsProxy.GetFileContentAsInputStream(ctx, s3container, "test-stream-jar")
-				if e != nil {
-					printCloudError(e)
-					assert.Fail(t, "failed")
-				} else {
-					defer fileStream.Close()
-					err := azureProxy.UploadFileFromInputStream(ctx, azureContainer, "jar-from-aws2.jar",
-						fileData, fileStream, length, 2)
-					if err != nil {
-						printCloudError(err)
-						assert.Fail(t, "failed")
-					} else {
-						assert.True(t, true, "succeeded")
-					}
-
-				}
-			}
-		}
-	}
-}
-
-func TestCopyS3FileToAzureStream(t *testing.T) {
-	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-		ConnectionString: os.Getenv("ConnectionString"),
-	})
-	if err != nil {
-		assert.Fail(t, "failure getting azure proxy")
-		printCloudError(err)
-	} else {
-		awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-			AccountURL: os.Getenv("S3AccountURL"),
-		})
-		if er != nil {
-			assert.Fail(t, "failure getting aws proxy")
-			printCloudError(err)
-		} else {
-			// copy file from s3 to azure
-			ctx := context.Background()
-			file, e := awsProxy.GetFile(ctx, s3container, "test-stream-jar")
-			if e != nil {
-				printCloudError(err)
-				assert.Fail(t, "failed to get file from aws")
-			} else {
-				length, _ := strconv.ParseInt(file.Metadata["content_length"], 2, 64)
-				println("length is " + file.Metadata["content_length"])
-				fileStream := strings.NewReader(file.Content)
-				err := azureProxy.UploadFileFromInputStream(ctx, azureContainer, "jar-from-aws.jar",
-					file.Metadata, fileStream, length, 10)
-				if err != nil {
-					printCloudError(err)
-					assert.Fail(t, "failed to upload from input stream")
-				} else {
-					assert.True(t, true, "succeeded")
-				}
-			}
-		}
-	}
-}
-
-//
-//func TestCopyS3ToS3WithDifferentCredentials(t *testing.T) {
-//	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-//		AccountURL: os.Getenv("S3AccountURL"),
-//	})
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to get proxy")
-//		return
-//	}
-//	awsLocal, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSConfiguredIdentity{
-//		AccountURL: "http://localhost:4566",
-//		AccessID:   "test",
-//		AccessKey:  "test",
-//	})
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to get local proxy")
-//		return
-//	}
-//	err = awsProxy.CopyFileToRemoteStorageContainer(context.Background(), s3container, "test-stream-jar",
-//		"my-first-bucket", "test-copy", &awsLocal, 10)
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to copy file")
-//		return
-//	}
-//	assert.Truef(t, true, "succeeded")
-//}
-
 func TestGetLargeFileAsByteArray(t *testing.T) {
 	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
 		AccountURL: os.Getenv("S3AccountURL"),
@@ -423,90 +310,56 @@ func TestGetLargeFileAsByteArray(t *testing.T) {
 
 }
 
-//func TestCopyS3ToAzure(t *testing.T) {
-//	awsProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-//		AccountURL: os.Getenv("S3AccountURL"),
-//	})
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to get proxy")
-//		return
-//	}
-//	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-//		ConnectionString: os.Getenv("ConnectionString"),
-//	})
-//
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to get azure proxy")
-//		return
-//	}
-//	err = awsProxy.CopyFileToRemoteStorageContainer(context.Background(), s3container, "test-stream-jar",
-//		"proxy-test", "test-copy", &azureProxy, 10)
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed to copy file")
-//		return
-//	}
-//	assert.Truef(t, true, "succeeded")
-//}
-
-//func TestCopyAzureToAzure(t *testing.T) {
-//	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-//		ConnectionString: os.Getenv("ConnectionString"),
-//	})
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failure getting azure proxy")
-//		return
-//	}
-//	err = azureProxy.CopyFileToLocalStorageContainer(context.Background(), "routeingress",
-//		"big/2g.txt",
-//		"proxy-test", "2gtest.txt")
-//	if err != nil {
-//		printCloudError(err)
-//		assert.Fail(t, "failed")
-//		return
-//	}
-//
-//}
-
-func TestPresignedURL(t *testing.T) {
-	az, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-		AccountURL: os.Getenv("S3AccountURL"),
-	})
-	ctx := context.Background()
-	sourceURL, _ := az.GetSourceBlobSignedURL(ctx, s3container, "test-stream-jar")
-	metadata, _ := az.GetMetadata(ctx, s3container, "test-stream-jar")
-	ax, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+func TestCopyS3ToAzure(t *testing.T) {
+	// needs 2 proxies
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
 		ConnectionString: os.Getenv("ConnectionString"),
 	})
-	err := ax.CopyFileFromSignedURL(context.Background(), sourceURL, azureContainer, "testfromaws.txt", metadata)
 	if err != nil {
 		printCloudError(err)
-	}
-}
-
-// this does not work
-func TestAWSWithURL(t *testing.T) {
-	aw, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
-		AccountURL: os.Getenv("S3AccountURL"),
-	})
-	ax, _ := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-		ConnectionString: os.Getenv("ConnectionString"),
-	})
-	ctx := context.Background()
-	url, er := aw.GetDestBlobSignedURL(ctx, s3container, "test-from-azure.txt")
-	if er != nil {
-		printCloudError(er)
-		assert.Fail(t, "failed")
+		assert.Fail(t, "failure getting azure proxy")
 		return
 	}
-	metadata, _ := ax.GetMetadata(ctx, azureContainer, "testfromaws.txt")
-	err := ax.CopyFileToSignedURL(ctx, azureContainer, "testfromaws.txt", url, metadata)
+	awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if er != nil {
+		printCloudError(er)
+		assert.Fail(t, "failed getting aws proxy")
+		return
+	}
+	e := azureProxy.CopyFileFromRemoteStorage(context.Background(), s3container, "test-stream-jar",
+		azureContainer, "testFromAwsJar.jar", &awsProxy, 10)
+	if e != nil {
+		printCloudError(e)
+		assert.Fail(t, "failed copy from s3")
+	}
+	assert.True(t, e == nil, "Success")
+}
+
+func TestCopyAzureToS3(t *testing.T) {
+	// needs 2 proxies
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
 	if err != nil {
 		printCloudError(err)
-		assert.Fail(t, "failed")
+		assert.Fail(t, "failure getting azure proxy")
+		return
 	}
-	assert.Truef(t, true, "succeeded")
+	awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if er != nil {
+		printCloudError(er)
+		assert.Fail(t, "failed getting aws proxy")
+		return
+	}
+	e := awsProxy.CopyFileFromRemoteStorage(context.Background(), azureContainer, "testFromAwsJar.jar",
+		s3container, "test-from-azure.jar", &azureProxy, 10)
+	if e != nil {
+		printCloudError(e)
+		assert.Fail(t, "failed copy from azure")
+	}
+	assert.True(t, e == nil, "Success")
 }

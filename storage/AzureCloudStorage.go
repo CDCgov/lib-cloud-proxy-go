@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -285,12 +284,7 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 	return nil
 }
 
-func (az *AzureCloudStorageProxy) CopyFileToRemoteStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
-
-	return nil
-}
-func (az *AzureCloudStorageProxy) CopyFileFromSignedURL(ctx context.Context, sourceSignedURL string, destContainer string,
+func (az *AzureCloudStorageProxy) copyFileFromSignedURL(ctx context.Context, sourceSignedURL string, destContainer string,
 	destFile string, metadata map[string]string) error {
 	destBlob := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
 
@@ -305,54 +299,6 @@ func (az *AzureCloudStorageProxy) CopyFileFromSignedURL(ctx context.Context, sou
 	return nil
 }
 
-func (az *AzureCloudStorageProxy) CopyFileToSignedURL(ctx context.Context, sourceContainer string, sourceFile string,
-	destSignedURL string, metadata map[string]string) error {
-	length := getStringAsInt64(metadata["content_length"])
-	source, err := az.GetFileContentAsInputStream(ctx, sourceContainer, sourceFile)
-	if err != nil {
-		return err
-	}
-	putRequest, er := http.NewRequest("PUT", destSignedURL, source)
-	if er != nil {
-		return wrapError("unable to create PUT request", er)
-	}
-	putRequest.ContentLength = length
-	_, ee := http.DefaultClient.Do(putRequest)
-	if ee != nil {
-		return wrapError("unable to put object in container", ee)
-	}
-	return nil
-}
-
-func (az *AzureCloudStorageProxy) CopyFileToLocalStorageContainer(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string) error {
-	sourceBlob := az.blobServiceClient.ServiceClient().NewContainerClient(sourceContainer).NewBlockBlobClient(sourceFile)
-	resp, err := sourceBlob.GetProperties(ctx, nil)
-	var props map[string]string
-	if err == nil {
-		props = readMetadata(resp.Metadata)
-	}
-
-	destBlob := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
-	sourceURL, er := sourceBlob.GetSASURL(sas.BlobPermissions{
-		Read:   true,
-		Add:    true,
-		Create: true,
-		Write:  true,
-	}, time.Now().Add(2*time.Hour), nil)
-	if er != nil {
-		return wrapError("unable to obtain SAS url for source blob", er)
-	}
-	_, e := destBlob.UploadBlobFromURL(ctx, sourceURL,
-		&blockblob.UploadBlobFromURLOptions{
-			Metadata: writeMetadata(props),
-		})
-
-	if e != nil {
-		return wrapError("unable to copy blob", e)
-	}
-	return nil
-}
 func (az *AzureCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
 	sourceBlob := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(fileName)
 	sourceURL, er := sourceBlob.GetSASURL(sas.BlobPermissions{
@@ -366,7 +312,36 @@ func (az *AzureCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, co
 	}
 	return sourceURL, nil
 }
+func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error {
+	// s3 to Azure, or other Azure storage account to Azure
+	s := *sourceProxy
+	metadata, err := s.GetMetadata(ctx, sourceContainer, sourceFile)
+	if err != nil {
+		return err
+	}
+	length := getStringAsInt64(metadata["content_length"])
 
-func (az *AzureCloudStorageProxy) GetDestBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
-	return az.GetSourceBlobSignedURL(ctx, containerName, fileName)
+	if length < size_5MiB*1000 {
+		url, er := s.GetSourceBlobSignedURL(ctx, sourceContainer, sourceFile)
+		if er != nil {
+			return er
+		}
+		return az.copyFileFromSignedURL(ctx, url, destContainer, destFile, metadata)
+	} else {
+		// do some chunk thing
+	}
+	return nil
+}
+
+func (az *AzureCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string) error {
+	source := az.blobServiceClient.ServiceClient().NewContainerClient(sourceContainer).NewBlobClient(sourceFile)
+	metadata, _ := az.GetMetadata(ctx, sourceContainer, sourceFile)
+	dest := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlobClient(destFile)
+	_, err := dest.CopyFromURL(ctx, source.URL(), &blob.CopyFromURLOptions{Metadata: writeMetadata(metadata)})
+	if err != nil {
+		return wrapError("unable to copy local file", err)
+	}
+	return nil
 }

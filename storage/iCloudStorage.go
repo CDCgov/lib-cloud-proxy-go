@@ -28,11 +28,10 @@ type CloudStorageProxy interface {
 		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
 	GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
-	GetDestBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
-	CopyFileFromSignedURL(ctx context.Context, sourceBlobSignedURL string, destContainer string,
-		destFile string, metadata map[string]string) error
-	CopyFileToSignedURL(ctx context.Context, sourceContainer string, sourceFile string,
-		destSignedURL string, metadata map[string]string) error
+	CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
+		destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error
+	CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
+		destContainer string, destFile string) error
 }
 
 type blobListType string

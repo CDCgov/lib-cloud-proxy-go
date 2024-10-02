@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"io"
+	"strconv"
 	"time"
 )
 
@@ -17,19 +18,20 @@ type CloudStorageProxy interface {
 	ListFiles(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	ListFolders(ctx context.Context, containerName string, maxNumber int, prefix string) ([]string, error)
 	GetFile(ctx context.Context, containerName string, fileName string) (CloudFile, error)
-	GetFileContent(ctx context.Context, containerName string, fileName string) (string, error)
+	GetFileContentAsString(ctx context.Context, containerName string, fileName string) (string, error)
 	GetFileContentAsInputStream(ctx context.Context, containerName string, fileName string) (io.ReadCloser, error)
-	GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error)
+	GetLargeFileContentAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error)
 	GetMetadata(ctx context.Context, containerName string, fileName string) (map[string]string, error)
-	UploadFileFromText(ctx context.Context, containerName string, fileName string, metadata map[string]string,
+	UploadFileFromString(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		content string) error
 	UploadFileFromInputStream(ctx context.Context, containerName string, fileName string, metadata map[string]string,
 		inputStream io.Reader, fileSizeBytes int64, concurrency int) error
 	DeleteFile(ctx context.Context, containerName string, fileName string) error
-	CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
-		destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error
-	//CopyFileToAzureContainer(ctx context.Context, sourceContainer string, sourceFile string,
-	//	destContainer string, destFile string, destinationProxy *AzureCloudStorageProxy) error
+	GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error)
+	CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
+		destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error
+	CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
+		destContainer string, destFile string) error
 }
 
 type blobListType string
@@ -58,4 +60,9 @@ func wrapError(msg string, err error) *CloudStorageError {
 
 func CloudStorageProxyFactory(handler ProxyAuthHandler) (CloudStorageProxy, error) {
 	return handler.createProxy()
+}
+
+func getStringAsInt64(number string) int64 {
+	length, _ := strconv.ParseInt(number, 10, 64)
+	return length
 }

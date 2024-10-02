@@ -33,4 +33,5 @@ type ProxyAuthHandlerAWSConfiguredIdentity struct {
 	AccountURL string
 	AccessID   string
 	AccessKey  string
+	Region     string
 }

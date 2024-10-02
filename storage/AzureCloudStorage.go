@@ -2,19 +2,23 @@ package storage
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"io"
 	"lib-cloud-proxy-go/util"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -151,7 +155,7 @@ func (az *AzureCloudStorageProxy) GetFile(ctx context.Context, containerName str
 	return file, err
 }
 
-func (az *AzureCloudStorageProxy) GetFileContent(ctx context.Context, containerName string, fileName string) (string, error) {
+func (az *AzureCloudStorageProxy) GetFileContentAsString(ctx context.Context, containerName string, fileName string) (string, error) {
 	content, _, err := az.getFileContentAndMetadata(ctx, containerName, fileName)
 	return content, err
 }
@@ -186,7 +190,7 @@ func (az *AzureCloudStorageProxy) GetFileContentAsInputStream(ctx context.Contex
 	}
 }
 
-func (az *AzureCloudStorageProxy) GetLargeFileAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error) {
+func (az *AzureCloudStorageProxy) GetLargeFileContentAsByteArray(ctx context.Context, containerName string, fileName string, fileSize int64, concurrency int) ([]byte, error) {
 	if concurrency <= 0 {
 		concurrency = 5
 	}
@@ -244,7 +248,7 @@ func writeMetadata(metadata map[string]string) map[string]*string {
 	return props
 }
 
-func (az *AzureCloudStorageProxy) UploadFileFromText(ctx context.Context, containerName string, fileName string,
+func (az *AzureCloudStorageProxy) UploadFileFromString(ctx context.Context, containerName string, fileName string,
 	metadata map[string]string, content string) error {
 	contentReader := strings.NewReader(content)
 	_, err := az.blobServiceClient.UploadStream(ctx, containerName, fileName, contentReader, &azblob.UploadStreamOptions{
@@ -283,7 +287,118 @@ func (az *AzureCloudStorageProxy) DeleteFile(ctx context.Context, containerName 
 	return nil
 }
 
-func (az *AzureCloudStorageProxy) CopyFileToS3Bucket(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string, destinationProxy *CloudStorageProxy, concurrency int) error {
+func (az *AzureCloudStorageProxy) copyFileFromSignedURL(ctx context.Context, sourceSignedURL string, destContainer string,
+	destFile string, metadata map[string]string) error {
+	destBlob := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
+
+	_, e := destBlob.UploadBlobFromURL(ctx, sourceSignedURL,
+		&blockblob.UploadBlobFromURLOptions{
+			Metadata: writeMetadata(metadata),
+		})
+
+	if e != nil {
+		return wrapError("unable to copy blob", e)
+	}
 	return nil
+}
+
+func (az *AzureCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, containerName string, fileName string) (string, error) {
+	sourceBlob := az.blobServiceClient.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(fileName)
+	sourceURL, er := sourceBlob.GetSASURL(sas.BlobPermissions{
+		Read:   true,
+		Add:    true,
+		Create: true,
+		Write:  true,
+	}, time.Now().Add(2*time.Hour), nil)
+	if er != nil {
+		return "", wrapError("unable to get signed url for source blob", er)
+	}
+	return sourceURL, nil
+}
+func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error {
+	// s3 to Azure, or other Azure storage account to Azure
+	s := *sourceProxy
+	metadata, err := s.GetMetadata(ctx, sourceContainer, sourceFile)
+	if err != nil {
+		return err
+	}
+	length := getStringAsInt64(metadata["content_length"])
+	url, er := s.GetSourceBlobSignedURL(ctx, sourceContainer, sourceFile)
+	if er != nil {
+		return er
+	}
+	if length < size_LARGEOBJECT {
+		return az.copyFileFromSignedURL(ctx, url, destContainer, destFile, metadata)
+	} else {
+		numChunks := length / size_5MiB
+		if length%size_5MiB != 0 {
+			numChunks++
+		}
+		blockBlobClient := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
+		blockBase := uuid.New()
+		blockIDs := make([]string, numChunks)
+		var chunkNum int64
+		var start int64 = 0
+		var count int64 = size_5MiB
+		chunkIdMap := make(map[string]azblob.HTTPRange)
+		for chunkNum = 0; chunkNum < numChunks; chunkNum++ {
+			end := start + count
+			if end > length {
+				count = 0
+			}
+			chunkId := base64.StdEncoding.EncodeToString([]byte(blockBase.String() + fmt.Sprintf("%04d", chunkNum)))
+			blockIDs[chunkNum] = chunkId
+			chunkIdMap[chunkId] = azblob.HTTPRange{
+				Offset: start,
+				Count:  count,
+			}
+			start = end
+		}
+		// TODO: throttle concurrency?
+		wg := sync.WaitGroup{}
+		errCh := make(chan error, 1)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		for id := range chunkIdMap {
+			wg.Add(1)
+			go func(chunkId string) {
+				_, err := blockBlobClient.StageBlockFromURL(ctx, chunkId, url, &blockblob.StageBlockFromURLOptions{
+					Range: chunkIdMap[chunkId],
+				})
+
+				if err != nil {
+					select {
+					case errCh <- err:
+						// error was set
+					default:
+						// some other error is already set
+					}
+					cancel()
+				}
+				wg.Done()
+			}(id)
+
+		}
+		wg.Wait()
+		select {
+		case err = <-errCh:
+			// there was an error during staging
+			return wrapError("error staging blocks", err)
+		default:
+			// no error was encountered
+		}
+		_, err = blockBlobClient.CommitBlockList(ctx, blockIDs,
+			&blockblob.CommitBlockListOptions{Metadata: writeMetadata(metadata)})
+		if err != nil {
+			return wrapError("unable to commit blocks", err)
+		}
+	}
+	return nil
+}
+
+func (az *AzureCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
+	destContainer string, destFile string) error {
+	var s CloudStorageProxy = az
+	return az.CopyFileFromRemoteStorage(ctx, sourceContainer, sourceFile, destContainer, destFile, &s, 10)
 }

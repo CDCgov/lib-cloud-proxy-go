@@ -405,16 +405,22 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 		select {
 		case err = <-errCh:
 			// there was an error during staging
-			_, _ = aw.s3ServicesClient.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{UploadId: aws.String(uploadId)})
+			_, _ = aw.s3ServicesClient.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(destContainer),
+				Key:      aws.String(destFile),
+				UploadId: aws.String(uploadId),
+			})
 			return wrapError("error staging blocks; copy aborted", err)
 		default:
 			// no error was encountered
 		}
 
+		// arrange parts in ordered list
 		for part := range responseCh {
 			partNum := *part.PartNumber
 			completedParts[partNum-1] = part
 		}
+
 		_, err = aw.s3ServicesClient.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(destContainer),
 			Key:      aws.String(destFile),

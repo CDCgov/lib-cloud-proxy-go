@@ -141,7 +141,7 @@ func TestGetFileContentAsInputStream(t *testing.T) {
 	if err == nil {
 		container := s3container
 		readCloser, err := az.GetFileContentAsInputStream(context.Background(),
-			container, "test-stream-upload")
+			container, "testFolder/test-fldr-upload.HL7")
 		if err == nil {
 			defer readCloser.Close()
 			content, err := io.ReadAll(readCloser)
@@ -151,6 +151,7 @@ func TestGetFileContentAsInputStream(t *testing.T) {
 			} else {
 				printCloudError(err)
 			}
+			assert.True(t, err == nil)
 		} else {
 			printCloudError(err)
 		}
@@ -166,7 +167,7 @@ func TestGetFile(t *testing.T) {
 	})
 	container := azureContainer
 	if az != nil {
-		cloudFile, err := az.GetFile(context.Background(), container, "test-text-upload.HL7")
+		cloudFile, err := az.GetFile(context.Background(), container, "test.HL7")
 		if err == nil {
 			fmt.Println("Success")
 			fmt.Println(cloudFile.Metadata)
@@ -174,6 +175,7 @@ func TestGetFile(t *testing.T) {
 		} else {
 			printCloudError(err)
 		}
+		assert.True(t, err == nil)
 	} else {
 		printCloudError(err)
 	}

@@ -6,14 +6,81 @@ The lib-cloud-proxy-go library is a rework of the [lib-cloud-proxy](https://gith
 library and is written in Golang. The design differs from the original library in the following ways:
 - It does not require any configuration yaml to determine the cloud provider. 
 - Because it does not pre-configure the cloud provider, the user can create more than one 
-instance of the CloudStorage class to interact with different cloud providers simultaneously.
-- It provides functions to copy from one storage provider to another.
+instance of the CloudStorageProxy class to interact with different cloud providers simultaneously.
+- It offers a function to copy files from one cloud provider to another.
 - The scope is limited to cloud storage (no messaging).
 
 Currently, the cloud providers supported by this library are AWS (S3)
 and Azure (Azure Blob Storage).
 
 ## Usage
+### Obtaining a Proxy instance
+All interactions with cloud storage are done through the `CloudStorageProxy`.
+To obtain an instance of `CloudStorageProxy`, you call the `CloudStorageProxyFactory()` method
+and pass in a `ProxyAuthHandler` that contains the authentication information needed
+to connect to the specific cloud provider and storage account you are targeting. 
+The factory method then returns a pointer to the underlying proxy class that targets that provider.
+
+There are several `ProxyAuthHandler` types available for connecting to S3 and Azure Blob Storage, 
+allowing the user to choose from multiple authentication strategies including connection string
+authentication, externally assigned managed identities, or client ID and secret authentication.
+
+For example, to connect to S3 using credentials that are stored with the application (referred
+to as the "default identity"), you would pass the factory method an instance of `ProxyAuthHandlerAWSDefaultIdentity`
+and supply the one piece of data it requires, the Account URL:
+
+```go
+	proxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: url,
+	})
+```
+Alternatively, you can supply a client ID and secret directly using the 
+`ProxyAuthHandlerAWSConfiguredIdentity` type.
+
+To connect to Azure Storage, the same factory method is used, passing in one of the
+Azure ProxyAuthHandlers. For example, this is how to connect to Azure using a connection string:
+```go
+	proxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: connString,
+	})
+```
+### Proxy methods
+Once you have a `CloudStorageProxy` instance, the following methods are available:
+ - ListFiles
+ - ListFolders
+ - GetFile
+ - GetFileContentAsString
+ - GetFileContentAsInputStream
+ - GetLargeFileContentAsByteArray
+ - GetMetadata
+ - UploadFileFromString
+ - UploadFileFromInputStream
+ - DeleteFile
+ - GetSourceBlobSignedURL
+ - CopyFileFromRemoteStorage
+ - CopyFileFromLocalStorage
+
+In the parlance of this library, "file" and "blob" both refer to the S3 Object or Azure Blob being accessed.
+
+Please see the tests provided in `test\storage_test.go` in this repository
+for examples of how to use these methods.
+
+### A note about the "Copy" functions
+`CopyFileFromRemoteStorage` is provided for the following
+scenarios:
+- Copying a file between two storage accounts that use different credentials 
+(e.g., S3 bucketA to S3 bucketB needing a different Client ID and Secret)
+- Copying a file between two storage accounts that are in different cloud providers
+  (i.e., S3 to Azure or Azure to S3)
+
+In either case, 2 proxies must be used to do the copy: the proxy attached to the 
+destination storage account calls the method, and the proxy to the source file 
+is passed into the method as a parameter.
+
+`CopyFileFromLocalStorage` is provided for the scenario where a file is being
+copied from one container to another within the same storage account, or from
+one folder to another within the same container. Since the credentials and cloud provider
+are the same in this case, only one proxy is needed.
 
 
 

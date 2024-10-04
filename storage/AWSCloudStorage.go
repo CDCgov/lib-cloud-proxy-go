@@ -9,9 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -278,6 +280,7 @@ func (aw *AWSCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, cont
 
 func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error {
+	// azure to s3 or different s3 account to s3
 	if concurrency <= 0 {
 		concurrency = 15
 	}
@@ -286,7 +289,7 @@ func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, s
 	if err != nil {
 		return wrapError("unable to read source file metadata", err)
 	}
-	fileSize, _ := strconv.ParseInt(metadata["content_length"], 10, 64)
+	fileSize := getStringAsInt64(metadata["content_length"])
 	if fileSize == 0 {
 		fileSize = 1
 	}
@@ -296,28 +299,256 @@ func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, s
 		if err != nil {
 			return wrapError("unable to read source file as stream", err)
 		}
+		if er := aw.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
+			fileSize, concurrency); er != nil {
+			return er
+		}
 	} else {
 		content, err := s.GetLargeFileContentAsByteArray(ctx, sourceContainer, sourceFile, fileSize, concurrency)
 		if err != nil {
 			return wrapError("unable to get large file as byte array", err)
 		}
-		inputStream = bytes.NewReader(content)
+		if e := aw.doMultipartUpload(ctx, destContainer, destFile, metadata, content); e != nil {
+			return e
+		}
+		//inputStream = bytes.NewReader(content)
+		//contentString := string(content)
+		//if e := aw.UploadFileFromString(ctx, destContainer, destFile, metadata, contentString); e != nil {
+		//	return e
+		//}
 	}
-	if err := aw.UploadFileFromInputStream(ctx, destContainer, destFile, metadata, inputStream,
-		fileSize, concurrency); err != nil {
-		return err
+
+	return nil
+}
+
+func (aw *AWSCloudStorageProxy) doMultipartUpload(ctx context.Context, destContainer string, destFile string,
+	metadata map[string]string, content []byte) error {
+	lengthInt := len(content)
+	length64 := int64(lengthInt)
+	upload, err := aw.s3ServicesClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:   aws.String(destContainer),
+		Key:      aws.String(destFile),
+		Metadata: metadata,
+	})
+	if err != nil {
+		return wrapError("unable to create multipart upload", err)
+	}
+	uploadId := *upload.UploadId
+	var partSize int = size_5MiB
+	if lengthInt > partSize*max_PARTS {
+		// we need to increase the Part size
+		partSize = lengthInt / max_PARTS
+	}
+	partSize64 := int64(partSize)
+	// if this doesn't divide evenly, we will add the remainder to the final chunk.
+	// otherwise, if we add another chunk for the remainder, it will be too small
+	// and upload will fail
+	numChunks := lengthInt / partSize
+
+	var chunkNum int
+	var start int64 = 0
+	var count int64 = partSize64
+	type chunkPart struct {
+		start int64
+		count int64
+	}
+	chunkIdMap := make(map[int]chunkPart)
+	for chunkNum = 1; chunkNum <= numChunks; chunkNum++ {
+		end := start + partSize64
+		if chunkNum == numChunks {
+			count = length64 - start
+		}
+		chunkIdMap[chunkNum] = chunkPart{
+			start: start,
+			count: count,
+		}
+		start = end + 1
+	}
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, 1)
+	responseCh := make(chan types.CompletedPart, numChunks)
+	completedParts := make([]types.CompletedPart, numChunks)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	reader := bytes.NewReader(content)
+	for chunkId, chunkOffset := range chunkIdMap {
+		wg.Add(1)
+		go func(chunkId int, chunkOffset chunkPart) {
+			uploadPartResp, err := aw.s3ServicesClient.UploadPart(ctx, &s3.UploadPartInput{
+				Bucket:     aws.String(destContainer),
+				Key:        aws.String(destFile),
+				PartNumber: aws.Int32(int32(chunkId)),
+				UploadId:   aws.String(uploadId),
+				Body:       io.NewSectionReader(reader, chunkOffset.start, chunkOffset.count),
+			})
+			if err != nil {
+				select {
+				case errCh <- err:
+					// error was set
+				default:
+					// some other error is already set
+				}
+				cancel()
+			} else {
+				responseCh <- types.CompletedPart{
+					ETag:       uploadPartResp.ETag,
+					PartNumber: aws.Int32(int32(chunkId)),
+				}
+			}
+			wg.Done()
+		}(chunkId, chunkOffset)
+	}
+	wg.Wait()
+	close(responseCh)
+	select {
+	case err = <-errCh:
+		// there was an error during staging
+		_, _ = aw.s3ServicesClient.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+			Bucket:   aws.String(destContainer),
+			Key:      aws.String(destFile),
+			UploadId: aws.String(uploadId),
+		})
+		return wrapError("error staging blocks; copy aborted", err)
+	default:
+		// no error was encountered
+	}
+
+	// arrange parts in ordered list
+	for part := range responseCh {
+		partNum := *part.PartNumber
+		completedParts[partNum-1] = part
+	}
+
+	_, err = aw.s3ServicesClient.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:   aws.String(destContainer),
+		Key:      aws.String(destFile),
+		UploadId: aws.String(uploadId),
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: completedParts,
+		},
+	})
+	if err != nil {
+		return wrapError("unable to complete multipart upload", err)
 	}
 	return nil
 }
+
 func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string) error {
 	source := fmt.Sprintf("%s/%s", sourceContainer, sourceFile)
-	if _, err := aw.s3ServicesClient.CopyObject(ctx, &s3.CopyObjectInput{
-		CopySource: aws.String(source),
-		Bucket:     aws.String(destContainer),
-		Key:        aws.String(destFile),
-	}); err != nil {
-		return wrapError("unable to copy object to S3 bucket", err)
+	metadata, e := aw.GetMetadata(ctx, sourceContainer, sourceFile)
+	if e != nil {
+		return e
+	}
+	length := getStringAsInt64(metadata["content_length"])
+	if length < size_LARGEOBJECT {
+		if _, err := aw.s3ServicesClient.CopyObject(ctx, &s3.CopyObjectInput{
+			CopySource: aws.String(source),
+			Bucket:     aws.String(destContainer),
+			Key:        aws.String(destFile),
+		}); err != nil {
+			return wrapError("unable to copy object to S3 bucket", err)
+		}
+	} else {
+		lengthInt := int(length)
+		upload, err := aw.s3ServicesClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:   aws.String(destContainer),
+			Key:      aws.String(destFile),
+			Metadata: metadata,
+		})
+		if err != nil {
+			return wrapError("unable to create multipart upload", err)
+		}
+		uploadId := *upload.UploadId
+		var partSize int = size_5MiB
+		if lengthInt > partSize*max_PARTS {
+			// we need to increase the Part size
+			partSize = lengthInt / max_PARTS
+		}
+		numChunks := lengthInt / partSize
+		if lengthInt%partSize != 0 {
+			numChunks++
+		}
+		var chunkNum int
+		var start = 0
+		var end = 0
+		chunkIdMap := make(map[int]string)
+		for chunkNum = 1; chunkNum <= numChunks; chunkNum++ {
+			end = start + partSize - 1
+			if end >= lengthInt {
+				end = lengthInt - 1
+			}
+			chunkIdMap[chunkNum] = fmt.Sprintf("bytes=%d-%d", start, end)
+			start = end + 1
+		}
+		wg := sync.WaitGroup{}
+		errCh := make(chan error, 1)
+		responseCh := make(chan types.CompletedPart, numChunks)
+		completedParts := make([]types.CompletedPart, numChunks)
+
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		for chunkId, rangeHeader := range chunkIdMap {
+			wg.Add(1)
+			go func(chunkId int, rangeHeader string) {
+				uploadPartResp, err := aw.s3ServicesClient.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
+					Bucket:          aws.String(destContainer),
+					CopySource:      aws.String(source),
+					CopySourceRange: aws.String(rangeHeader),
+					Key:             aws.String(destFile),
+					PartNumber:      aws.Int32(int32(chunkId)),
+					UploadId:        aws.String(uploadId),
+				})
+				if err != nil {
+					select {
+					case errCh <- err:
+						// error was set
+					default:
+						// some other error is already set
+					}
+					cancel()
+				} else {
+					responseCh <- types.CompletedPart{
+						ETag:       uploadPartResp.CopyPartResult.ETag,
+						PartNumber: aws.Int32(int32(chunkId)),
+					}
+				}
+				wg.Done()
+			}(chunkId, rangeHeader)
+		}
+		wg.Wait()
+		close(responseCh)
+		select {
+		case err = <-errCh:
+			// there was an error during staging
+			_, _ = aw.s3ServicesClient.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(destContainer),
+				Key:      aws.String(destFile),
+				UploadId: aws.String(uploadId),
+			})
+			return wrapError("error staging blocks; copy aborted", err)
+		default:
+			// no error was encountered
+		}
+
+		// arrange parts in ordered list
+		for part := range responseCh {
+			partNum := *part.PartNumber
+			completedParts[partNum-1] = part
+		}
+
+		_, err = aw.s3ServicesClient.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+			Bucket:   aws.String(destContainer),
+			Key:      aws.String(destFile),
+			UploadId: aws.String(uploadId),
+			MultipartUpload: &types.CompletedMultipartUpload{
+				Parts: completedParts,
+			},
+		})
+		if err != nil {
+			return wrapError("unable to complete multipart upload", err)
+		}
 	}
 	return nil
 }

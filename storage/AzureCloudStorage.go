@@ -318,6 +318,7 @@ func (az *AzureCloudStorageProxy) GetSourceBlobSignedURL(ctx context.Context, co
 func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
 	destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error {
 	// s3 to Azure, or other Azure storage account to Azure
+	maxPartsAzure := int64(50000)
 	s := *sourceProxy
 	metadata, err := s.GetMetadata(ctx, sourceContainer, sourceFile)
 	if err != nil {
@@ -331,8 +332,13 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 	if length < size_LARGEOBJECT {
 		return az.copyFileFromSignedURL(ctx, url, destContainer, destFile, metadata)
 	} else {
-		numChunks := length / size_5MiB
-		if length%size_5MiB != 0 {
+		var partSize int64 = size_5MiB
+		if length > size_5MiB*maxPartsAzure {
+			// we need to increase the Part size
+			partSize = length / maxPartsAzure
+		}
+		numChunks := length / partSize
+		if length%partSize != 0 {
 			numChunks++
 		}
 		blockBlobClient := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
@@ -347,7 +353,7 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 			if end > length {
 				count = 0
 			}
-			chunkId := base64.StdEncoding.EncodeToString([]byte(blockBase.String() + fmt.Sprintf("%04d", chunkNum)))
+			chunkId := base64.StdEncoding.EncodeToString([]byte(blockBase.String() + fmt.Sprintf("%05d", chunkNum)))
 			blockIDs[chunkNum] = chunkId
 			chunkIdMap[chunkId] = azblob.HTTPRange{
 				Offset: start,

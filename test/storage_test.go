@@ -356,7 +356,7 @@ func TestCopyAzureToS3(t *testing.T) {
 		return
 	}
 	e := awsProxy.CopyFileFromRemoteStorage(context.Background(), azureContainer, "testFromAwsJar.jar",
-		s3container, "test-from-azure.zip", &azureProxy, 100)
+		s3container, "test-from-azure-multi.zip", &azureProxy, 100)
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed copy from azure")
@@ -393,7 +393,7 @@ func TestCopyLocalS3(t *testing.T) {
 		return
 	}
 	err := awsProxy.CopyFileFromLocalStorage(context.Background(), s3container, "test-from-azure.zip",
-		s3container, "testFolder/test-copy.zip")
+		s3container, "testFolder/test-copy-s3.zip")
 	if err != nil {
 		printCloudError(err)
 	}

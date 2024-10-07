@@ -123,43 +123,42 @@ func TestGetFileContent(t *testing.T) {
 		if err == nil {
 			fmt.Println("Success")
 			fmt.Println(content)
-			assert.Truef(t, true, "succeeded")
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "failed")
 		}
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "failed")
 	}
+	assert.True(t, err == nil)
 }
 
 func TestGetFileContentAsInputStream(t *testing.T) {
-	if az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSConfiguredIdentity{
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSConfiguredIdentity{
 		AccountURL: os.Getenv("S3AccountURL"),
 		AccessID:   os.Getenv("AWS_ACCESS_KEY_ID"),
 		AccessKey:  os.Getenv("AWS_SECRET_ACCESS_KEY"),
-	}); err == nil {
+	})
+	if err == nil {
 		container := s3container
-		if readCloser, err := az.GetFileContentAsInputStream(context.Background(),
-			container, "test-stream-upload"); err == nil {
+		readCloser, err := az.GetFileContentAsInputStream(context.Background(),
+			container, "testFolder/test-fldr-upload.HL7")
+		if err == nil {
 			defer readCloser.Close()
-			if content, err := io.ReadAll(readCloser); err == nil {
+			content, err := io.ReadAll(readCloser)
+			if err == nil {
 				println("Success")
-				assert.Truef(t, true, "succeeded")
 				println(string(content))
 			} else {
 				printCloudError(err)
-				assert.Fail(t, "reading content failed")
 			}
+			assert.True(t, err == nil)
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "getting input stream failed")
 		}
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "getting proxy failed")
 	}
+	assert.True(t, err == nil)
 }
 
 func TestGetFile(t *testing.T) {
@@ -168,20 +167,19 @@ func TestGetFile(t *testing.T) {
 	})
 	container := azureContainer
 	if az != nil {
-		cloudFile, err := az.GetFile(context.Background(), container, "test-text-upload.HL7")
+		cloudFile, err := az.GetFile(context.Background(), container, "test.HL7")
 		if err == nil {
 			fmt.Println("Success")
 			fmt.Println(cloudFile.Metadata)
 			fmt.Println(cloudFile.Content)
-			assert.Truef(t, true, "succeeded")
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "failed")
 		}
+		assert.True(t, err == nil)
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "failed")
 	}
+	assert.True(t, err == nil)
 }
 
 func TestUploadText(t *testing.T) {
@@ -190,28 +188,27 @@ func TestUploadText(t *testing.T) {
 	})
 	container := s3container
 	if err == nil {
-		if content, err := os.ReadFile("test.HL7"); err == nil {
+		content, err := os.ReadFile("test.HL7")
+		if err == nil {
 			metadata := map[string]string{
 				"upload_id":      "1234567890",
 				"data_stream_id": "DAART",
 			}
-			e := az.UploadFileFromString(context.Background(), container,
+			err = az.UploadFileFromString(context.Background(), container,
 				"testFolder/test-fldr-upload.HL7",
 				metadata, string(content))
-			if e != nil {
-				printCloudError(e)
-				assert.Fail(t, "upload failed")
+			if err != nil {
+				printCloudError(err)
 			} else {
 				println("Success")
 			}
 		} else {
 			printCloudError(err)
-			assert.Fail(t, "read file failed")
 		}
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "getting proxy failed")
 	}
+	assert.True(t, err == nil)
 }
 
 func TestUploadStream(t *testing.T) {
@@ -234,20 +231,18 @@ func TestUploadStream(t *testing.T) {
 			"data_stream_id": "DAART",
 		}
 		reader := bufio.NewReader(file)
-		e := az.UploadFileFromInputStream(context.Background(), container, "test-stream-test",
+		err = az.UploadFileFromInputStream(context.Background(), container, "test-stream-test",
 			metadata, reader, fileSize, 10)
-		if e != nil {
-			printCloudError(e)
-			assert.Fail(t, "upload failed")
+		if err != nil {
+			printCloudError(err)
 		} else {
 			println("Success")
 		}
 
 	} else {
 		printCloudError(err)
-		assert.Fail(t, "getting proxy failed")
 	}
-
+	assert.True(t, err == nil)
 }
 
 func TestDeleteFile(t *testing.T) {
@@ -256,24 +251,20 @@ func TestDeleteFile(t *testing.T) {
 	})
 	container := s3container
 	if err == nil {
-		er := az.DeleteFile(context.Background(), container, "test-stream-upload")
-		if er != nil {
-			printCloudError(er)
+		err = az.DeleteFile(context.Background(), container, "test-stream-upload")
+		if err != nil {
+			printCloudError(err)
 			var cloudError *storage.CloudStorageError
-			if errors.As(er, &cloudError) {
+			if errors.As(err, &cloudError) {
 				inner := cloudError.Unwrap()
 				if strings.Contains(inner.Error(), "404") {
 					// blob does not exist -- fine
-					assert.Truef(t, true, "succeeded")
-				} else {
-					assert.Fail(t, "failed")
+					err = nil
 				}
 			}
-		} else {
-			println("Success")
-			assert.Truef(t, true, "succeeded")
 		}
 	}
+	assert.True(t, err == nil)
 }
 
 func TestGetLargeFileAsByteArray(t *testing.T) {

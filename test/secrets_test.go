@@ -4,7 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 	"lib-cloud-proxy-go/secrets"
+	"os"
+	"testing"
+	"time"
 )
 
 func init() {
@@ -23,4 +28,19 @@ func printCloudSecretsError(err error) {
 			}
 		}
 	}
+}
+
+func TestAzureGetSecret(t *testing.T) {
+	url := os.Getenv("AzureKeyVaultURL")
+	secretName := os.Getenv("AzureSecretName")
+	az, err := secrets.CloudSecretsProxyFactory(secrets.ProxyAuthHandlerAzureDefaultIdentity{KeyVaultURL: url},
+		&secrets.CloudSecretsCacheOptions{
+			MaxEntries: 10,
+			TTL:        time.Minute * 10,
+		})
+	if err != nil {
+		printCloudSecretsError(err)
+	}
+	value, err := az.GetSecret(context.Background(), secretName)
+	assert.True(t, len(value) > 0 && err == nil)
 }

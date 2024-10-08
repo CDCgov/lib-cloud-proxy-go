@@ -14,3 +14,13 @@ type ProxyAuthHandlerAzureClientSecretIdentity struct {
 	ClientID     string
 	ClientSecret string
 }
+
+type ProxyAuthHandlerAWSDefaultIdentity struct {
+	Region string
+}
+
+type ProxyAuthHandlerAWSConfiguredIdentity struct {
+	AccessID  string
+	AccessKey string
+	Region    string
+}

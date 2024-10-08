@@ -16,7 +16,7 @@ type CloudSecretsCacheOptions struct {
 }
 
 func CloudSecretsProxyFactory(handler ProxyAuthHandler, options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
-	return handler.createSecretsClient(options)
+	return handler.createProxy(options)
 }
 
 type CloudSecretsError struct {

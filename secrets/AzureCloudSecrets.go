@@ -66,7 +66,7 @@ func (cache *secretCache) evict() {
 	cache.secrets = sortedCache
 }
 
-func (handler ProxyAuthHandlerAzureDefaultIdentity) createSecretsClient(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
+func (handler ProxyAuthHandlerAzureDefaultIdentity) createProxy(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
 		return createProxyFromCredential(handler.KeyVaultURL, credential, options)
@@ -74,7 +74,7 @@ func (handler ProxyAuthHandlerAzureDefaultIdentity) createSecretsClient(options 
 	return nil, err
 }
 
-func (handler ProxyAuthHandlerAzureClientSecretIdentity) createSecretsClient(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
+func (handler ProxyAuthHandlerAzureClientSecretIdentity) createProxy(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
 	credential, err := azidentity.NewClientSecretCredential(handler.TenantID, handler.ClientID,
 		handler.ClientSecret, nil)
 	if err == nil {

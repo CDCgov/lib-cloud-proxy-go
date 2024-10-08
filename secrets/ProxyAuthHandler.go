@@ -1,7 +1,7 @@
 package secrets
 
 type ProxyAuthHandler interface {
-	createSecretsClient(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error)
+	createProxy(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error)
 }
 
 type ProxyAuthHandlerAzureDefaultIdentity struct {

@@ -44,7 +44,7 @@ func createProxyFromCredential(accountURL string, credential azcore.TokenCredent
 			cache:                &cache,
 		}, nil
 	}
-	return nil, wrapError("unable to create Azure KeyVault service client", err)
+	return nil, wrapError("unable to create Azure Key Vault service client", err)
 
 }
 

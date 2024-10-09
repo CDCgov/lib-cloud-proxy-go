@@ -1,19 +1,21 @@
 # lib-cloud-proxy-go
-This library provides an easy, cloud-agnostic way to interact with cloud storage.
+This library provides an easy, cloud-agnostic way to interact with cloud blob/object storage and 
+cloud secret stores.
 
 ## Intro
 The lib-cloud-proxy-go library is a rework of the [lib-cloud-proxy](https://github.com/CDCgov/lib-cloud-proxy) (Kotlin) 
 library and is written in Golang. The design differs from the original library in the following ways:
 - It does not require any configuration yaml to determine the cloud provider. 
 - Because it does not pre-configure the cloud provider, the user can create more than one 
-instance of the CloudStorageProxy class to interact with different cloud providers simultaneously.
+instance of each proxy class to interact with different cloud providers simultaneously.
 - It offers a function to copy files from one cloud provider to another.
-- The scope is limited to cloud storage (no messaging).
+- It does not include a messaging proxy.
+- It does include a proxy for retrieving secrets by secret ID/name.
 
-Currently, the cloud providers supported by this library are AWS (S3)
-and Azure (Azure Blob Storage).
+Currently, the cloud providers supported by this library are AWS (S3, Secrets Manager)
+and Azure (Azure Blob Storage, Azure Key Vault).
 
-## Usage
+## CloudStorageProxy Usage
 ### Obtaining a Proxy instance
 All interactions with cloud storage are done through the `CloudStorageProxy`.
 To obtain an instance of `CloudStorageProxy`, you call the `CloudStorageProxyFactory()` method
@@ -82,6 +84,39 @@ copied from one container to another within the same storage account, or from
 one folder to another within the same container. Since the credentials and cloud provider
 are the same in this case, only one proxy is needed.
 
+## CloudSecretsProxy Usage
+### Obtaining a Proxy instance
+All interactions with secret stores are done through the `CloudSecretsProxy`. To obtain an instance
+of `CloudSecretsProxy`, you call the `CloudSecretsProxyFactory()` method and pass in two parameters:
+1. a `ProxyAuthHandler`that contains the authentication information needed to connect to the specific cloud provider
+you are targeting, and
+2. a pointer to `CloudSecretsCacheOptions` that configures the proxy's local cache.
+
+### Secrets caching
+To save time and round-trips, once a secret has been pulled from the cloud, the `CloudSecretsProxy` stores
+it in a local cache in case it is needed again. Each proxy instance maintains its own cache, which
+is initialized when the proxy is created via the factory method. To that end, the `CloudSecretsCacheOptions`
+has two important settings:
+1. **MaxEntries**: the maximum number of secrets to keep in the cache at one time. When adding a secret to the 
+cache would cause the maximum entries to be exceeded, the oldest member of the cache is evicted to make room
+for the new secret.
+2. **TTL**: the "time to live" for entries in the cache. When a secret is requested and it has been in
+the cache beyond the configured TTL duration, its value will be pulled from the cloud instead of the cache
+and the cache will be refreshed with the new value.
+
+### Proxy methods
+The `CloudSecretsProxy` offers these two methods for obtaining a secret:
+- GetSecret
+- GetBinarySecret
+
+When the proxy is targeting Azure Key Vault, use `GetSecret` to retrieve the decoded secret value
+as a string. 
+Key Vault does not support storing binary objects as secrets at this time, so calling `GetBinarySecret`
+on a `CloudSecretsProxy` targeting Azure will return the secret string value as an array of bytes.
+
+When the proxy is targeting AWS Secrets Manager, `GetSecret` will return all key/value pairs stored
+under that secret's name as a JSON string. If the secret is stored as binary instead of one or more
+key/value pairs, you must call `GetBinarySecret` to get the secret value.
 
 
 ## Related documents

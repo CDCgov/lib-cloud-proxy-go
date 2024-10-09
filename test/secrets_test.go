@@ -44,3 +44,18 @@ func TestAzureGetSecret(t *testing.T) {
 	value, err := az.GetSecret(context.Background(), secretName)
 	assert.True(t, len(value) > 0 && err == nil)
 }
+
+func TestAWSGetSecret(t *testing.T) {
+	aw, err := secrets.CloudSecretsProxyFactory(secrets.ProxyAuthHandlerAWSDefaultIdentity{
+		Region: os.Getenv("AWS_DEFAULT_REGION"),
+	}, &secrets.CloudSecretsCacheOptions{
+		MaxEntries: 3,
+		TTL:        time.Hour,
+	})
+	assert.True(t, err == nil)
+	s, err := aw.GetSecret(context.Background(), "dev-routing-test-secret-1")
+	printCloudSecretsError(err)
+	assert.True(t, err == nil)
+	assert.True(t, len(s) > 0)
+	println(s)
+}

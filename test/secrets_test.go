@@ -57,4 +57,5 @@ func TestAWSGetSecret(t *testing.T) {
 	printCloudSecretsError(err)
 	assert.True(t, err == nil)
 	assert.True(t, len(s) > 0)
+	println(s)
 }

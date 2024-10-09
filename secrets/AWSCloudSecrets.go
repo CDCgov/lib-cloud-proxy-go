@@ -15,20 +15,33 @@ type AWSCloudSecretsProxy struct {
 }
 
 func (handler ProxyAuthHandlerAWSDefaultIdentity) createProxy(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
-	awsConfig, err := config.LoadDefaultConfig(context.TODO())
+	var awsConfig aws.Config
+	var err error
+	if handler.Region != "" {
+		awsConfig, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(handler.Region))
+	} else {
+		awsConfig, err = config.LoadDefaultConfig(context.TODO())
+	}
 	if err != nil {
-		return nil, wrapError("unable to create S3 service client", err)
+		return nil, wrapError("unable to create Secrets Manager service client", err)
 	}
 	return createProxyFromConfig(handler.Region, &awsConfig, options), nil
 
 }
 
 func (handler ProxyAuthHandlerAWSConfiguredIdentity) createProxy(options *CloudSecretsCacheOptions) (CloudSecretsProxy, error) {
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(handler.AccessID, handler.AccessKey, "")),
-	)
+	var awsConfig aws.Config
+	var err error
+	if handler.Region != "" {
+		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(handler.AccessID, handler.AccessKey, "")),
+			config.WithRegion(handler.Region))
+	} else {
+		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(handler.AccessID, handler.AccessKey, "")))
+	}
 	if err != nil {
-		return nil, wrapError("unable to create S3 service client", err)
+		return nil, wrapError("unable to create Secrets Manager service client", err)
 	}
 	return createProxyFromConfig(handler.Region, &awsConfig, options), nil
 }

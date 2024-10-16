@@ -308,7 +308,7 @@ func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, s
 		if err != nil {
 			return wrapError("unable to get large file as byte array", err)
 		}
-		if e := aw.doMultipartUpload(ctx, destContainer, destFile, metadata, content); e != nil {
+		if e := aw.doMultipartUpload(ctx, destContainer, destFile, metadata, content, concurrency); e != nil {
 			return e
 		}
 		//inputStream = bytes.NewReader(content)
@@ -322,7 +322,7 @@ func (aw *AWSCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context, s
 }
 
 func (aw *AWSCloudStorageProxy) doMultipartUpload(ctx context.Context, destContainer string, destFile string,
-	metadata map[string]string, content []byte) error {
+	metadata map[string]string, content []byte, concurrency int) error {
 	lengthInt := len(content)
 	length64 := int64(lengthInt)
 	upload, err := aw.s3ServicesClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
@@ -372,9 +372,12 @@ func (aw *AWSCloudStorageProxy) doMultipartUpload(ctx context.Context, destConta
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	reader := bytes.NewReader(content)
+	routines := 0
 	for chunkId, chunkOffset := range chunkIdMap {
 		wg.Add(1)
+		routines++
 		go func(chunkId int, chunkOffset chunkPart) {
+			defer wg.Done()
 			uploadPartResp, err := aw.s3ServicesClient.UploadPart(ctx, &s3.UploadPartInput{
 				Bucket:     aws.String(destContainer),
 				Key:        aws.String(destFile),
@@ -396,8 +399,11 @@ func (aw *AWSCloudStorageProxy) doMultipartUpload(ctx context.Context, destConta
 					PartNumber: aws.Int32(int32(chunkId)),
 				}
 			}
-			wg.Done()
 		}(chunkId, chunkOffset)
+		if routines >= concurrency {
+			wg.Wait()
+			routines = 0
+		}
 	}
 	wg.Wait()
 	close(responseCh)

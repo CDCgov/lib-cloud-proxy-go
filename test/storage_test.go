@@ -212,12 +212,12 @@ func TestUploadText(t *testing.T) {
 }
 
 func TestUploadStream(t *testing.T) {
-	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
-		ConnectionString: os.Getenv("ConnectionString"),
+	az, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
 	})
-	container := azureContainer
+	container := s3container
 	if err == nil {
-		file, _ := os.Open("test.HL7")
+		file, _ := os.Open("10gb.txt")
 		fileInfo, err := file.Stat()
 		var fileSize int64
 		if err == nil {
@@ -231,8 +231,8 @@ func TestUploadStream(t *testing.T) {
 			"data_stream_id": "DAART",
 		}
 		reader := bufio.NewReader(file)
-		err = az.UploadFileFromInputStream(context.Background(), container, "test-stream-test",
-			metadata, reader, fileSize, 10)
+		err = az.UploadFileFromInputStream(context.Background(), container, "10gb.txt",
+			metadata, reader, fileSize, 20)
 		if err != nil {
 			printCloudError(err)
 		} else {
@@ -301,6 +301,7 @@ func TestGetLargeFileAsByteArray(t *testing.T) {
 
 }
 
+// ***//
 func TestCopyS3ToAzure(t *testing.T) {
 	// needs 2 proxies
 	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
@@ -319,8 +320,8 @@ func TestCopyS3ToAzure(t *testing.T) {
 		assert.Fail(t, "failed getting aws proxy")
 		return
 	}
-	e := azureProxy.CopyFileFromRemoteStorage(context.Background(), s3container, "test-stream-jar",
-		azureContainer, "testFromAwsJar.jar", &awsProxy, 10)
+	e := azureProxy.CopyFileFromRemoteStorage(context.Background(), s3container, "10gb.txt",
+		azureContainer, "10gb-from-aws.txt", &awsProxy, 1000)
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed copy from s3")
@@ -346,8 +347,8 @@ func TestCopyAzureToS3(t *testing.T) {
 		assert.Fail(t, "failed getting aws proxy")
 		return
 	}
-	e := awsProxy.CopyFileFromRemoteStorage(context.Background(), azureContainer, "testFromAwsJar.jar",
-		s3container, "test-from-azure-multi.zip", &azureProxy, 100)
+	e := awsProxy.CopyFileFromRemoteStorage(context.Background(), azureContainer, "test-from-aws.zip",
+		s3container, "test-from-azure-1.zip", &azureProxy, 100)
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed copy from azure")
@@ -365,7 +366,7 @@ func TestCopyLocalAzure(t *testing.T) {
 		return
 	}
 	e := azureProxy.CopyFileFromLocalStorage(context.Background(), "routeingress", "big/2g.txt",
-		"proxy-test", "2gtest2.txt")
+		"proxy-test", "2gtest.txt")
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed")

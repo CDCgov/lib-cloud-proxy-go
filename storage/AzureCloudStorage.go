@@ -361,14 +361,16 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 			}
 			start = end
 		}
-		// TODO: throttle concurrency?
 		wg := sync.WaitGroup{}
 		errCh := make(chan error, 1)
 		ctx, cancel := context.WithCancel(ctx)
+		routines := 0
 		defer cancel()
 		for id := range chunkIdMap {
 			wg.Add(1)
+			routines++
 			go func(chunkId string) {
+				defer wg.Done()
 				_, err := blockBlobClient.StageBlockFromURL(ctx, chunkId, url, &blockblob.StageBlockFromURLOptions{
 					Range: chunkIdMap[chunkId],
 				})
@@ -382,9 +384,11 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 					}
 					cancel()
 				}
-				wg.Done()
 			}(id)
-
+			if routines >= concurrency {
+				wg.Wait()
+				routines = 0
+			}
 		}
 		wg.Wait()
 		select {

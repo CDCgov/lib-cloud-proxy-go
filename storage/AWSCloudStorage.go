@@ -441,7 +441,7 @@ func (aw *AWSCloudStorageProxy) doMultipartUpload(ctx context.Context, destConta
 }
 
 func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string) error {
+	destContainer string, destFile string, concurrency int) error {
 	source := fmt.Sprintf("%s/%s", sourceContainer, sourceFile)
 	metadata, e := aw.GetMetadata(ctx, sourceContainer, sourceFile)
 	if e != nil {

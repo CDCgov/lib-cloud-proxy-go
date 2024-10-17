@@ -473,9 +473,6 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 			partSize = lengthInt / max_PARTS
 		}
 		numChunks := lengthInt / partSize
-		//if lengthInt%partSize != 0 {
-		//	numChunks++
-		//}
 		var chunkNum int
 		var start = 0
 		var end = 0

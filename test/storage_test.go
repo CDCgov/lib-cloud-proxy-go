@@ -366,7 +366,7 @@ func TestCopyLocalAzure(t *testing.T) {
 		return
 	}
 	e := azureProxy.CopyFileFromLocalStorage(context.Background(), "routeingress", "big/2g.txt",
-		"proxy-test", "2gtest.txt")
+		"proxy-test", "2gtest.txt", 100)
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed")
@@ -385,7 +385,7 @@ func TestCopyLocalS3(t *testing.T) {
 		return
 	}
 	err := awsProxy.CopyFileFromLocalStorage(context.Background(), s3container, "test-from-azure.zip",
-		s3container, "testFolder/test-copy-s3.zip")
+		s3container, "testFolder/test-copy-s3-1.zip", 30)
 	if err != nil {
 		printCloudError(err)
 	}

@@ -408,7 +408,7 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 }
 
 func (az *AzureCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
-	destContainer string, destFile string) error {
+	destContainer string, destFile string, concurrency int) error {
 	var s CloudStorageProxy = az
-	return az.CopyFileFromRemoteStorage(ctx, sourceContainer, sourceFile, destContainer, destFile, &s, 10)
+	return az.CopyFileFromRemoteStorage(ctx, sourceContainer, sourceFile, destContainer, destFile, &s, concurrency)
 }

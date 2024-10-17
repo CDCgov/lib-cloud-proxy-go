@@ -31,7 +31,7 @@ type CloudStorageProxy interface {
 	CopyFileFromRemoteStorage(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error
 	CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
-		destContainer string, destFile string) error
+		destContainer string, destFile string, concurrency int) error
 }
 
 type blobListType string

@@ -391,3 +391,31 @@ func TestCopyLocalS3(t *testing.T) {
 	}
 	assert.True(t, err == nil, "succeeded")
 }
+
+func TestCreateContainerAzure(t *testing.T) {
+	azureProxy, err := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAzureConnectionString{
+		ConnectionString: os.Getenv("ConnectionString"),
+	})
+	if err != nil {
+		printCloudError(err)
+		assert.Fail(t, "failure getting azure proxy")
+		return
+	}
+	err = azureProxy.CreateContainerIfNotExists(context.TODO(), "quq6-container1")
+	printCloudError(err)
+	assert.True(t, err == nil)
+}
+
+func TestCreateContainerS3(t *testing.T) {
+	awsProxy, er := storage.CloudStorageProxyFactory(storage.ProxyAuthHandlerAWSDefaultIdentity{
+		AccountURL: os.Getenv("S3AccountURL"),
+	})
+	if er != nil {
+		printCloudError(er)
+		assert.Fail(t, "failed getting aws proxy")
+		return
+	}
+	err := awsProxy.CreateContainerIfNotExists(context.TODO(), "quq6-container1")
+	printCloudError(err)
+	assert.True(t, err == nil)
+}

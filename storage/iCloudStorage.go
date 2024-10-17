@@ -32,6 +32,7 @@ type CloudStorageProxy interface {
 		destContainer string, destFile string, sourceProxy *CloudStorageProxy, concurrency int) error
 	CopyFileFromLocalStorage(ctx context.Context, sourceContainer string, sourceFile string,
 		destContainer string, destFile string, concurrency int) error
+	CreateContainerIfNotExists(ctx context.Context, containerName string) error
 }
 
 type blobListType string

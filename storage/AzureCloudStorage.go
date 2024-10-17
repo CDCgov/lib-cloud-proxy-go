@@ -3,12 +3,14 @@ package storage
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
@@ -408,4 +410,15 @@ func (az *AzureCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, 
 	destContainer string, destFile string, concurrency int) error {
 	var s CloudStorageProxy = az
 	return az.CopyFileFromRemoteStorage(ctx, sourceContainer, sourceFile, destContainer, destFile, &s, concurrency)
+}
+
+func (az *AzureCloudStorageProxy) CreateContainerIfNotExists(ctx context.Context, containerName string) error {
+	_, err := az.blobServiceClient.CreateContainer(ctx, containerName, nil)
+	var respErr *azcore.ResponseError
+	if err != nil && errors.As(err, &respErr) {
+		if !bloberror.HasCode(respErr, bloberror.ContainerAlreadyExists) {
+			return wrapError("could not create container "+containerName, err)
+		}
+	}
+	return nil
 }

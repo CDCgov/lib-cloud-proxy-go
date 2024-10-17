@@ -366,7 +366,7 @@ func TestCopyLocalAzure(t *testing.T) {
 		return
 	}
 	e := azureProxy.CopyFileFromLocalStorage(context.Background(), "routeingress", "big/2g.txt",
-		"proxy-test", "2gtest.txt", 1000)
+		"proxy-test", "2gtest.txt", 100)
 	if e != nil {
 		printCloudError(e)
 		assert.Fail(t, "failed")

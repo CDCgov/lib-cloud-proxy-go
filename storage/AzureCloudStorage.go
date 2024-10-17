@@ -338,9 +338,6 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 			partSize = length / maxPartsAzure
 		}
 		numChunks := length / partSize
-		if length%partSize != 0 {
-			numChunks++
-		}
 		blockBlobClient := az.blobServiceClient.ServiceClient().NewContainerClient(destContainer).NewBlockBlobClient(destFile)
 		blockBase := uuid.New()
 		blockIDs := make([]string, numChunks)
@@ -350,7 +347,7 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 		chunkIdMap := make(map[string]azblob.HTTPRange)
 		for chunkNum = 0; chunkNum < numChunks; chunkNum++ {
 			end := start + count
-			if end > length {
+			if chunkNum == numChunks-1 {
 				count = 0
 			}
 			chunkId := base64.StdEncoding.EncodeToString([]byte(blockBase.String() + fmt.Sprintf("%05d", chunkNum)))

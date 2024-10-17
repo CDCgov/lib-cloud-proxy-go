@@ -473,16 +473,16 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 			partSize = lengthInt / max_PARTS
 		}
 		numChunks := lengthInt / partSize
-		if lengthInt%partSize != 0 {
-			numChunks++
-		}
+		//if lengthInt%partSize != 0 {
+		//	numChunks++
+		//}
 		var chunkNum int
 		var start = 0
 		var end = 0
 		chunkIdMap := make(map[int]string)
 		for chunkNum = 1; chunkNum <= numChunks; chunkNum++ {
 			end = start + partSize - 1
-			if end >= lengthInt {
+			if chunkNum == numChunks {
 				end = lengthInt - 1
 			}
 			chunkIdMap[chunkNum] = fmt.Sprintf("bytes=%d-%d", start, end)
@@ -495,9 +495,12 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
+		routines := 0
 		for chunkId, rangeHeader := range chunkIdMap {
 			wg.Add(1)
+			routines++
 			go func(chunkId int, rangeHeader string) {
+				defer wg.Done()
 				uploadPartResp, err := aw.s3ServicesClient.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 					Bucket:          aws.String(destContainer),
 					CopySource:      aws.String(source),
@@ -520,8 +523,12 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 						PartNumber: aws.Int32(int32(chunkId)),
 					}
 				}
-				wg.Done()
+
 			}(chunkId, rangeHeader)
+			if routines >= concurrency {
+				wg.Wait()
+				routines = 0
+			}
 		}
 		wg.Wait()
 		close(responseCh)

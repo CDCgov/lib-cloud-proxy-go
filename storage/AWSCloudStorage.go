@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -559,6 +560,17 @@ func (aw *AWSCloudStorageProxy) CopyFileFromLocalStorage(ctx context.Context, so
 		if err != nil {
 			return wrapError("unable to complete multipart upload", err)
 		}
+	}
+	return nil
+}
+
+func (aw *AWSCloudStorageProxy) CreateContainerIfNotExists(ctx context.Context, containerName string) error {
+	_, err := aw.s3ServicesClient.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(containerName),
+	})
+	var bne *types.BucketAlreadyExists
+	if err != nil && !errors.As(err, &bne) {
+		return wrapError("unable to create bucket "+containerName, err)
 	}
 	return nil
 }

@@ -346,7 +346,7 @@ func (az *AzureCloudStorageProxy) CopyFileFromRemoteStorage(ctx context.Context,
 		blockIDs := make([]string, numChunks)
 		var chunkNum int64
 		var start int64 = 0
-		var count int64 = size_5MiB
+		var count int64 = partSize
 		chunkIdMap := make(map[string]azblob.HTTPRange)
 		for chunkNum = 0; chunkNum < numChunks; chunkNum++ {
 			end := start + count

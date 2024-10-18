@@ -9,7 +9,7 @@ import (
 )
 
 const max_RESULT int = 500
-const time_FORMAT string = time.RFC3339
+const time_FORMAT string = time.RFC3339Nano
 const size_5MiB = 5 * 1024 * 1024
 const max_PARTS = 10000
 const size_LARGEOBJECT = 50 * 1024 * 1024
